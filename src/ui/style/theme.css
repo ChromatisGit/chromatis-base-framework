@@ -1,0 +1,182 @@
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 16px;
+  --background: #fafaf9;
+  --foreground: #2d2926;
+  --card: #ffffff;
+  --card-foreground: #2d2926;
+  --popover: #ffffff;
+  --popover-foreground: #2d2926;
+  --primary: #f97316;
+  --primary-foreground: #ffffff;
+  --secondary: #fff7ed;
+  --secondary-foreground: #2d2926;
+  --muted: #f5f5f4;
+  --muted-foreground: #78716c;
+  --accent: #ffedd5;
+  --accent-foreground: #2d2926;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: rgba(120, 113, 108, 0.15);
+  --input: transparent;
+  --input-background: #ffffff;
+  --switch-background: #d6d3d1;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: #fb923c;
+  --radius: 1rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #2d2926;
+  --sidebar-primary: #f97316;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #fff7ed;
+  --sidebar-accent-foreground: #2d2926;
+  --sidebar-border: rgba(120, 113, 108, 0.15);
+  --sidebar-ring: #fb923c;
+  --warm-peach: #fb923c;
+  --warm-coral: #f97316;
+  --warm-light: #ffedd5;
+  --warm-lighter: #fff7ed;
+  --success: #10b981;
+  --success-light: #d1fae5;
+
+  /* Achievement dot colors */
+  --dot-color-1: #fb923c;
+  --dot-color-2: #c084fc;
+  --dot-color-3: #60a5fa;
+  --dot-color-4: #34d399;
+  --dot-color-5: #fbbf24;
+  --dot-color-6: #f472b6;
+  --dot-color-7: #a78bfa;
+}
+
+.dark {
+  --background: #1c1917;
+  --foreground: #fafaf9;
+  --card: #292524;
+  --card-foreground: #fafaf9;
+  --popover: #292524;
+  --popover-foreground: #fafaf9;
+  --primary: #fb923c;
+  --primary-foreground: #1c1917;
+  --secondary: #44403c;
+  --secondary-foreground: #fafaf9;
+  --muted: #292524;
+  --muted-foreground: #a8a29e;
+  --accent: #44403c;
+  --accent-foreground: #fafaf9;
+  --destructive: #f87171;
+  --destructive-foreground: #1c1917;
+  --border: rgba(168, 162, 158, 0.2);
+  --input: rgba(168, 162, 158, 0.2);
+  --input-background: #292524;
+  --ring: #fb923c;
+  --sidebar: #292524;
+  --sidebar-foreground: #fafaf9;
+  --sidebar-primary: #fb923c;
+  --sidebar-primary-foreground: #1c1917;
+  --sidebar-accent: #44403c;
+  --sidebar-accent-foreground: #fafaf9;
+  --sidebar-border: rgba(168, 162, 158, 0.2);
+  --sidebar-ring: #fb923c;
+  --warm-peach: #fb923c;
+  --warm-coral: #f97316;
+  --warm-light: #44403c;
+  --warm-lighter: #3a3633;
+  --success: #34d399;
+  --success-light: #065f46;
+
+  /* Achievement dot colors - same vibrant colors */
+  --dot-color-1: #fb923c;
+  --dot-color-2: #c084fc;
+  --dot-color-3: #60a5fa;
+  --dot-color-4: #34d399;
+  --dot-color-5: #fbbf24;
+  --dot-color-6: #f472b6;
+  --dot-color-7: #a78bfa;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+
+  html {
+    font-size: var(--font-size);
+  }
+
+  h1 {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h2 {
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h3 {
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h4 {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  button {
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  input, textarea, select {
+    font-family: inherit;
+    font-size: inherit;
+  }
+}
