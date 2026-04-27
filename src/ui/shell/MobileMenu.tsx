@@ -2,14 +2,16 @@ import { useEffect } from "react";
 import { Link } from "react-router";
 import { X, Moon, Sun, LogIn } from "lucide-react";
 import { toggleTheme, type NavItem } from "./navItems.js";
+import type { SidebarBrand } from "./Sidebar.js";
 
 interface Props {
+  brand: SidebarBrand;
   isOpen: boolean;
   onClose: () => void;
   navItems: readonly NavItem[];
 }
 
-export function MobileMenu({ isOpen, onClose, navItems }: Props) {
+export function MobileMenu({ brand, isOpen, onClose, navItems }: Props) {
   useEffect(() => {
     if (!isOpen) return;
 
@@ -48,9 +50,9 @@ export function MobileMenu({ isOpen, onClose, navItems }: Props) {
         <div className="flex items-center justify-between px-4 py-4 border-b border-border flex-shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
-              <span className="text-primary-foreground text-xs font-bold">D</span>
+              <span className="text-primary-foreground text-xs font-bold">{brand.initial}</span>
             </div>
-            <span className="text-sm font-semibold text-foreground">DropSort</span>
+            <span className="text-sm font-semibold text-foreground">{brand.name}</span>
           </div>
           <button
             type="button"

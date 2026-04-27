@@ -1,7 +1,7 @@
 import {
   startTransition,
+  useCallback,
   useEffect,
-  useEffectEvent,
   useRef,
   useState,
 } from "react";
@@ -24,13 +24,18 @@ export function useDbQuery<T>(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const genRef = useRef(0);
+  const loadRef = useRef(load);
 
-  const runLoad = useEffectEvent(async () => {
+  useEffect(() => {
+    loadRef.current = load;
+  }, [load]);
+
+  const runLoad = useCallback(async () => {
     if (!db) return;
     const gen = ++genRef.current;
     setLoading(true);
     try {
-      const next = await load(db);
+      const next = await loadRef.current(db);
       if (gen !== genRef.current) return;
       startTransition(() => {
         setData(next);
@@ -44,12 +49,12 @@ export function useDbQuery<T>(
     } finally {
       if (gen === genRef.current) setLoading(false);
     }
-  });
+  }, [db]);
 
   useEffect(() => {
     if (!db) return;
     void runLoad();
-  }, [db, ...deps]);
+  }, [db, runLoad, ...deps]);
 
   useEffect(() => {
     function handleSync() {
@@ -57,7 +62,7 @@ export function useDbQuery<T>(
     }
     window.addEventListener("desk:synced", handleSync);
     return () => window.removeEventListener("desk:synced", handleSync);
-  }, []);
+  }, [runLoad]);
 
   return { db, data, loading, error, refresh: runLoad };
 }

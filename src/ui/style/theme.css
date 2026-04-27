@@ -1,5 +1,18 @@
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Platform theme defaults — neutral placeholders.
+ * Each project overrides brand vars in its own CSS, imported after app.css:
+ *
+ *   --primary / --primary-foreground
+ *   --ring / --sidebar-primary / --sidebar-ring
+ *   --secondary / --accent (and their -foreground counterparts)
+ *
+ * Example project override:
+ *   :root { --primary: #f97316; --ring: #fb923c; }
+ *   .dark { --primary: #fb923c; }
+ */
+
 :root {
   --font-size: 16px;
   --background: #fafaf9;
@@ -8,13 +21,13 @@
   --card-foreground: #2d2926;
   --popover: #ffffff;
   --popover-foreground: #2d2926;
-  --primary: #f97316;
+  --primary: #6366f1;
   --primary-foreground: #ffffff;
-  --secondary: #fff7ed;
+  --secondary: #f4f4f5;
   --secondary-foreground: #2d2926;
   --muted: #f5f5f4;
   --muted-foreground: #78716c;
-  --accent: #ffedd5;
+  --accent: #f4f4f5;
   --accent-foreground: #2d2926;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
@@ -24,31 +37,33 @@
   --switch-background: #d6d3d1;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring: #fb923c;
+  --ring: #818cf8;
   --radius: 1rem;
   --sidebar: #ffffff;
   --sidebar-foreground: #2d2926;
-  --sidebar-primary: #f97316;
+  --sidebar-primary: #6366f1;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #fff7ed;
+  --sidebar-accent: #f4f4f5;
   --sidebar-accent-foreground: #2d2926;
   --sidebar-border: rgba(120, 113, 108, 0.15);
-  --sidebar-ring: #fb923c;
-  --warm-peach: #fb923c;
-  --warm-coral: #f97316;
-  --warm-light: #ffedd5;
-  --warm-lighter: #fff7ed;
+  --sidebar-ring: #818cf8;
   --success: #10b981;
   --success-light: #d1fae5;
 
-  /* Achievement dot colors */
-  --dot-color-1: #fb923c;
-  --dot-color-2: #c084fc;
-  --dot-color-3: #60a5fa;
-  --dot-color-4: #34d399;
-  --dot-color-5: #fbbf24;
-  --dot-color-6: #f472b6;
-  --dot-color-7: #a78bfa;
+  /* Spacing scale — use these in CSS that can't use Tailwind utility classes */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.06);
+  --shadow-md: 0 4px 12px 0 rgb(0 0 0 / 0.08);
+  --shadow-lg: 0 10px 30px 0 rgb(0 0 0 / 0.12);
 }
 
 .dark {
@@ -58,43 +73,34 @@
   --card-foreground: #fafaf9;
   --popover: #292524;
   --popover-foreground: #fafaf9;
-  --primary: #fb923c;
+  --primary: #818cf8;
   --primary-foreground: #1c1917;
-  --secondary: #44403c;
+  --secondary: #27272a;
   --secondary-foreground: #fafaf9;
   --muted: #292524;
   --muted-foreground: #a8a29e;
-  --accent: #44403c;
+  --accent: #27272a;
   --accent-foreground: #fafaf9;
   --destructive: #f87171;
   --destructive-foreground: #1c1917;
   --border: rgba(168, 162, 158, 0.2);
   --input: rgba(168, 162, 158, 0.2);
   --input-background: #292524;
-  --ring: #fb923c;
+  --ring: #818cf8;
   --sidebar: #292524;
   --sidebar-foreground: #fafaf9;
-  --sidebar-primary: #fb923c;
+  --sidebar-primary: #818cf8;
   --sidebar-primary-foreground: #1c1917;
-  --sidebar-accent: #44403c;
+  --sidebar-accent: #27272a;
   --sidebar-accent-foreground: #fafaf9;
   --sidebar-border: rgba(168, 162, 158, 0.2);
-  --sidebar-ring: #fb923c;
-  --warm-peach: #fb923c;
-  --warm-coral: #f97316;
-  --warm-light: #44403c;
-  --warm-lighter: #3a3633;
+  --sidebar-ring: #818cf8;
   --success: #34d399;
   --success-light: #065f46;
 
-  /* Achievement dot colors - same vibrant colors */
-  --dot-color-1: #fb923c;
-  --dot-color-2: #c084fc;
-  --dot-color-3: #60a5fa;
-  --dot-color-4: #34d399;
-  --dot-color-5: #fbbf24;
-  --dot-color-6: #f472b6;
-  --dot-color-7: #a78bfa;
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.2);
+  --shadow-md: 0 4px 12px 0 rgb(0 0 0 / 0.25);
+  --shadow-lg: 0 10px 30px 0 rgb(0 0 0 / 0.35);
 }
 
 @theme inline {

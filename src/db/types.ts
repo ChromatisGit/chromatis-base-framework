@@ -15,7 +15,13 @@ export interface DbSql {
   unsafe(identifier: string): SqlFragment;
 }
 
+export type UserCtx = {
+  id: string;
+  role: string;
+  groupKey: string | null;
+};
+
 export interface DbAdapter {
-  getDb(): DbSql;
-  withUserContext<T>(userId: string, fn: () => Promise<T>): Promise<T>;
+  withAnonTx<T>(fn: (sql: DbSql) => Promise<T>): Promise<T>;
+  withUserTx<T>(user: UserCtx, fn: (sql: DbSql) => Promise<T>): Promise<T>;
 }

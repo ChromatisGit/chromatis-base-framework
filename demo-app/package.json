@@ -1,0 +1,33 @@
+{
+  "name": "demo-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "react-router dev",
+    "build": "react-router build",
+    "typecheck": "react-router typegen && tsc"
+  },
+  "dependencies": {
+    "@platform/framework": "file:..",
+    "tw-animate-css": "^1.2.5",
+    "@fontsource/plus-jakarta-sans": "^5.2.8",
+    "lucide-react": "^1.7.0",
+    "motion": "^12.38.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "@react-router/node": "^7.13.2",
+    "react-router": "7.14.2",
+    "sonner": "^1.7.4",
+    "isbot": "^5"
+  },
+  "devDependencies": {
+    "@react-router/dev": "^7.13.2",
+    "@react-router/fs-routes": "^7.13.2",
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^5.0.0",
+    "vite": "^6.3.5"
+  }
+}

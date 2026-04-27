@@ -1,15 +1,17 @@
 import { useLocation, useNavigate } from "react-router";
 import { X } from "lucide-react";
 import { toggleTheme, isActiveRoute, type NavItem } from "./navItems.js";
+import type { SidebarBrand } from "./Sidebar.js";
 
 interface Props {
+  brand: SidebarBrand;
   isOpen: boolean;
   onClose: () => void;
   mainNavItems: readonly NavItem[];
   secondaryNavItems: readonly NavItem[];
 }
 
-export function NavigationDrawer({ isOpen, onClose, mainNavItems, secondaryNavItems }: Props) {
+export function NavigationDrawer({ brand, isOpen, onClose, mainNavItems, secondaryNavItems }: Props) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -42,7 +44,7 @@ export function NavigationDrawer({ isOpen, onClose, mainNavItems, secondaryNavIt
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-border">
-            <h2 className="text-xl font-medium text-foreground">DropSort</h2>
+            <h2 className="text-xl font-medium text-foreground">{brand.name}</h2>
             <button
               onClick={onClose}
               className="p-2 rounded-full hover:bg-muted transition-colors"
@@ -89,9 +91,6 @@ export function NavigationDrawer({ isOpen, onClose, mainNavItems, secondaryNavIt
             >
               <span>Toggle theme</span>
             </button>
-            <p className="text-sm text-muted-foreground text-center">
-              Capture first, organize later
-            </p>
           </div>
         </div>
       </div>

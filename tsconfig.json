@@ -1,0 +1,10 @@
+{
+  "extends": "./infra/tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "paths": {
+      "@platform/*": ["./src/*"]
+    }
+  },
+  "include": ["src/**/*"]
+}

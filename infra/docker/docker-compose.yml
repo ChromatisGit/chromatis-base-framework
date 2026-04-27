@@ -1,0 +1,40 @@
+# Template — copy to project root and fill in the values below.
+# Variables sourced from a .env file in the project root:
+#   DB_NAME              e.g. myapp
+#   DB_USER              e.g. myapp
+#   DB_PASSWORD          e.g. secret
+#   DB_PORT              e.g. 6543
+#   DOCKER_DATABASE_URL  e.g. postgres://myapp:secret@db:5432/myapp
+#
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DOCKER_DATABASE_URL}
+      DB_DRIVER: node
+      DB_AUTO_INIT: "0"
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:

@@ -21,7 +21,7 @@ export class DatabaseSetupError extends Error {
     this.userMessage = options.userMessage;
     this.phase = options.phase;
     this.context = options.context;
-    this.code = options.code;
+    if (options.code !== undefined) this.code = options.code;
   }
 }
 
@@ -93,7 +93,7 @@ export function toDatabaseSetupError(
     userMessage: mapDatabaseSetupMessage(rawMessage, code),
     phase: options.phase,
     context: options.context,
-    code,
+    ...(code !== undefined ? { code } : {}),
     cause: error,
   });
 }

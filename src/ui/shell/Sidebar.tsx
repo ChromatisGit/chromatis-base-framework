@@ -1,83 +1,133 @@
+import { type ReactNode } from "react";
 import { Link, useLocation } from "react-router";
-import { LogIn, Moon, Sun } from "lucide-react";
+import { ChevronLeft, ChevronRight, Moon, Sun } from "lucide-react";
+import { cn } from "../primitives/cn.js";
 import { toggleTheme, isActiveRoute, type NavItem } from "./navItems.js";
 
-interface Props {
-  mainNavItems: readonly NavItem[];
-  secondaryNavItems: readonly NavItem[];
+export interface SidebarBrand {
+  name: string;
+  initial: string;
+  href?: string;
 }
 
-export function Sidebar({ mainNavItems, secondaryNavItems }: Props) {
+interface Props {
+  brand: SidebarBrand;
+  mainNavItems: readonly NavItem[];
+  secondaryNavItems?: readonly NavItem[];
+  collapsed: boolean;
+  onCollapsedChange: (collapsed: boolean) => void;
+  collapsible?: boolean;
+  userSlot?: ReactNode;
+}
+
+export function Sidebar({
+  brand,
+  mainNavItems,
+  secondaryNavItems = [],
+  collapsed,
+  onCollapsedChange,
+  collapsible = false,
+  userSlot,
+}: Props) {
   const location = useLocation();
 
-  function navItemClass(path: string) {
-    return `flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm no-underline transition-colors ${
+  function itemClass(path: string) {
+    return cn(
+      "flex items-center gap-3 w-full rounded-xl text-sm no-underline transition-colors",
+      collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2.5",
       isActiveRoute(path, location.pathname)
         ? "bg-primary text-primary-foreground font-medium"
-        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-    }`;
+        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+    );
   }
 
-  return (
-    <div className="flex flex-col w-full h-full bg-card border-r border-border">
-      {/* Brand */}
-      <div className="px-4 py-5 border-b border-border flex-shrink-0">
-        <Link to="/" className="flex items-center gap-3 no-underline">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
-            <span className="text-primary-foreground text-sm font-bold">D</span>
-          </div>
-          <span className="text-base font-semibold text-foreground whitespace-nowrap">DropSort</span>
-        </Link>
-      </div>
-
-      {/* Nav items */}
-      <nav className="flex-1 overflow-y-auto p-2 flex flex-col gap-0.5" aria-label="Main navigation">
-        {/* Main pages */}
-        {mainNavItems.map(({ path, label, icon: Icon }) => (
-          <Link key={path} to={path} className={navItemClass(path)}>
-            <Icon size={18} className="flex-shrink-0" aria-hidden />
-            <span>{label}</span>
-          </Link>
-        ))}
-
-        {/* Section divider */}
-        <div className="my-1.5 border-t border-border" />
-
-        {/* Secondary pages */}
-        {secondaryNavItems.map(({ path, label, icon: Icon, badge }) => (
-          <Link key={path} to={path} className={navItemClass(path)}>
-            <Icon size={18} className="flex-shrink-0" aria-hidden />
+  function renderNavItem({ path, label, icon: Icon, badge }: NavItem) {
+    return (
+      <Link key={path} to={path} className={itemClass(path)} title={collapsed ? label : undefined}>
+        <Icon size={18} className="flex-shrink-0" aria-hidden />
+        {!collapsed && (
+          <>
             <span className="flex-1">{label}</span>
             {badge !== undefined && badge > 0 && (
               <span className="min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-semibold leading-none">
                 {badge > 99 ? "99+" : badge}
               </span>
             )}
-          </Link>
-        ))}
+          </>
+        )}
+      </Link>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "relative flex flex-col h-full bg-card border-r border-border transition-[width] duration-200",
+        collapsed ? "w-16" : "w-60",
+      )}
+    >
+      {/* Collapse toggle */}
+      {collapsible && (
+        <button
+          type="button"
+          onClick={() => onCollapsedChange(!collapsed)}
+          className="absolute -right-3 top-5 z-10 w-6 h-6 rounded-full bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground shadow-sm transition-colors"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
+        </button>
+      )}
+
+      {/* Brand */}
+      <div className={cn("border-b border-border flex-shrink-0", collapsed ? "px-3 py-5 flex justify-center" : "px-4 py-5")}>
+        <Link
+          to={brand.href ?? "/"}
+          className={cn("flex items-center gap-3 no-underline", collapsed && "justify-center")}
+        >
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
+            <span className="text-primary-foreground text-sm font-bold">{brand.initial}</span>
+          </div>
+          {!collapsed && (
+            <span className="text-base font-semibold text-foreground whitespace-nowrap">{brand.name}</span>
+          )}
+        </Link>
+      </div>
+
+      {/* Nav */}
+      <nav
+        className={cn("flex-1 overflow-y-auto flex flex-col gap-0.5", collapsed ? "p-1.5" : "p-2")}
+        aria-label="Main navigation"
+      >
+        {mainNavItems.map(renderNavItem)}
+
+        {secondaryNavItems.length > 0 && (
+          <>
+            <div className="my-1.5 border-t border-border" />
+            {secondaryNavItems.map(renderNavItem)}
+          </>
+        )}
       </nav>
 
-      {/* Bottom actions */}
-      <div className="flex-shrink-0 border-t border-border p-2 flex flex-col gap-0.5">
+      {/* Bottom: theme toggle (always) + user slot (expanded only) */}
+      <div className={cn("flex-shrink-0 border-t border-border flex flex-col gap-0.5", collapsed ? "p-1.5" : "p-2")}>
         <button
           type="button"
           onClick={toggleTheme}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          className={cn(
+            "flex items-center gap-3 w-full rounded-xl text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors",
+            collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2.5",
+          )}
+          title={collapsed ? "Toggle theme" : undefined}
+          aria-label="Toggle theme"
         >
           <Moon size={18} className="flex-shrink-0 dark:hidden" aria-hidden />
           <Sun size={18} className="flex-shrink-0 hidden dark:block" aria-hidden />
-          <span>Toggle theme</span>
+          {!collapsed && <span>Toggle theme</span>}
         </button>
 
-        <button
-          type="button"
-          disabled
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm text-muted-foreground/40 cursor-not-allowed"
-          title="Login coming soon"
-        >
-          <LogIn size={18} className="flex-shrink-0" aria-hidden />
-          <span>Login</span>
-        </button>
+        {userSlot !== undefined && !collapsed && (
+          <div className="mt-1">{userSlot}</div>
+        )}
       </div>
     </div>
   );

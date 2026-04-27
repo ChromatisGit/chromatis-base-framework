@@ -36,11 +36,9 @@ const READY = Symbol("ready");
 const readinessCache = new Map<string, Promise<void> | typeof READY>();
 const MIGRATION_LOCK_NAMESPACE = 23117;
 const MIGRATION_LOCK_KEY = 40873;
-const baselineMigration = runtimeMigrations[0];
-
-if (!baselineMigration) {
-  throw new Error("Missing runtime baseline migration.");
-}
+const _rawBaseline = runtimeMigrations[0];
+if (!_rawBaseline) throw new Error("Missing runtime baseline migration.");
+const baselineMigration: RuntimeMigrationAsset = _rawBaseline;
 
 function logSetupPhase(
   context: string,
@@ -221,7 +219,7 @@ async function runEnsureDatabaseReady(options: EnsureDatabaseReadyOptions): Prom
       }
 
       const lockedState = await probeDatabaseState(query);
-      let appliedVersions = new Set(lockedState.appliedVersions);
+      const appliedVersions = new Set(lockedState.appliedVersions);
 
       if (!appliedVersions.has(baselineMigration.version)) {
         await applyBaseline(options.context, query, appliedVersions);
