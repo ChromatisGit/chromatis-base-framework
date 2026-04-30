@@ -1,14 +1,13 @@
 import postgres from "postgres";
-import { getDatabaseAutoInitEnabled, getDatabaseUrl } from "../runtime/env.js";
 import { ensureDatabaseReady, type SetupQueryExecutor } from "./setup.js";
 import { createSqlTag } from "./sql-tag.js";
-import type { DbAdapter, DbSql, UserCtx } from "./types.js";
+import type { AdapterSetupOptions, DbAdapter, DbSql, UserCtx } from "./types.js";
 
 let localPool: ReturnType<typeof postgres> | null = null;
 
-function getLocalPool() {
+function getPool(connectionString: string): ReturnType<typeof postgres> {
   if (!localPool) {
-    localPool = postgres(getDatabaseUrl());
+    localPool = postgres(connectionString);
   }
   return localPool;
 }
@@ -17,31 +16,11 @@ type PostgresQueryable = {
   unsafe: (query: string, params?: postgres.ParameterOrJSON<never>[]) => Promise<unknown[]>;
 };
 
-async function executeNodeQuery(
-  queryable: PostgresQueryable,
-  statement: string,
-  values: readonly unknown[] = [],
-): Promise<Array<Record<string, unknown>>> {
-  const rows = await queryable.unsafe(statement, [...values] as postgres.ParameterOrJSON<never>[]);
-  return rows as Array<Record<string, unknown>>;
-}
-
-function getNodeSetupQuery(queryable: PostgresQueryable): SetupQueryExecutor {
-  return (statement, values) => executeNodeQuery(queryable, statement, values);
-}
-
-async function ensureNodeDatabaseReady(): Promise<void> {
-  const connectionKey = getDatabaseUrl();
-  return ensureDatabaseReady({
-    autoInitEnabled: getDatabaseAutoInitEnabled(),
-    connectionKey,
-    context: "node",
-    query: getNodeSetupQuery(getLocalPool() as unknown as PostgresQueryable),
-    transaction: async <T>(fn: (query: SetupQueryExecutor) => Promise<T>): Promise<T> =>
-      getLocalPool().begin((transaction) =>
-        fn(getNodeSetupQuery(transaction as unknown as PostgresQueryable))
-      ) as Promise<T>,
-  });
+function makeSetupExecutor(queryable: PostgresQueryable): SetupQueryExecutor {
+  return async (statement, values = []) => {
+    const rows = await queryable.unsafe(statement, values as postgres.ParameterOrJSON<never>[]);
+    return rows as Array<Record<string, unknown>>;
+  };
 }
 
 async function setRlsContext(
@@ -65,20 +44,34 @@ function makeTxSql(tx: postgres.TransactionSql): DbSql {
   });
 }
 
-export const nodeDbAdapter: DbAdapter = {
-  async withAnonTx<T>(fn: (sql: DbSql) => Promise<T>): Promise<T> {
-    await ensureNodeDatabaseReady();
-    return getLocalPool().begin(async (tx) => {
-      await setRlsContext(tx, "", "", "");
-      return fn(makeTxSql(tx));
-    }) as Promise<T>;
-  },
+export function createNodeAdapter(connectionString: string): DbAdapter {
+  const pool = getPool(connectionString);
 
-  async withUserTx<T>(user: UserCtx, fn: (sql: DbSql) => Promise<T>): Promise<T> {
-    await ensureNodeDatabaseReady();
-    return getLocalPool().begin(async (tx) => {
-      await setRlsContext(tx, user.id, user.role, user.groupKey ?? "");
-      return fn(makeTxSql(tx));
-    }) as Promise<T>;
-  },
-};
+  return {
+    async withAnonTx<T>(fn: (sql: DbSql) => Promise<T>): Promise<T> {
+      return pool.begin(async (tx) => {
+        await setRlsContext(tx, "", "", "");
+        return fn(makeTxSql(tx));
+      }) as Promise<T>;
+    },
+
+    async withUserTx<T>(user: UserCtx, fn: (sql: DbSql) => Promise<T>): Promise<T> {
+      return pool.begin(async (tx) => {
+        await setRlsContext(tx, user.id, user.role ?? "", user.groupKey ?? "");
+        return fn(makeTxSql(tx));
+      }) as Promise<T>;
+    },
+
+    async runSetup(options: AdapterSetupOptions): Promise<void> {
+      return ensureDatabaseReady({
+        ...options,
+        context: "node",
+        query: makeSetupExecutor(pool as unknown as PostgresQueryable),
+        transaction: async <T>(fn: (query: SetupQueryExecutor) => Promise<T>): Promise<T> =>
+          pool.begin((tx) =>
+            fn(makeSetupExecutor(tx as unknown as PostgresQueryable)),
+          ) as Promise<T>,
+      });
+    },
+  };
+}

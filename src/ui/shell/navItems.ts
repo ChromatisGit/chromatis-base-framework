@@ -1,9 +1,9 @@
-import type { LucideIcon } from "lucide-react";
+import type { ComponentType, SVGAttributes } from "react";
 
 export interface NavItem {
   path: string;
   label: string;
-  icon: LucideIcon;
+  icon: ComponentType<SVGAttributes<SVGElement> & { size?: number | string; strokeWidth?: number | string }>;
   badge?: number;
 }
 

@@ -17,6 +17,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./component": "./src/component.ts",
+    "./db": "./src/db.ts",
+    "./runtime": "./src/runtime.ts",
+    "./offline": "./src/offline.ts",
     "./styles": "./src/ui/style/app.css"
   },
   "dependencies": {

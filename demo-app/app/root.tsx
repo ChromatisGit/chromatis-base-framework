@@ -58,7 +58,6 @@ export function Layout_({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const [collapsed, setCollapsed] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
 
   const sidebar = (
     <Sidebar
@@ -76,8 +75,6 @@ export default function App() {
       mainNavItems={navItems}
       sidebar={sidebar}
       menuNavItems={navItems}
-      menuOpen={menuOpen}
-      onMenuClose={() => setMenuOpen(false)}
       mobilePattern="top-tabs"
     >
       <Outlet />

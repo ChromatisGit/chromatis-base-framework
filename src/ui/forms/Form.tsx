@@ -1,20 +1,18 @@
-import { type FormHTMLAttributes } from "react"
+import { type ComponentProps } from "react"
 import { Form as RRForm, useNavigation } from "react-router"
 import { FormContext } from "./formContext"
 
-interface FormProps extends Omit<FormHTMLAttributes<HTMLFormElement>, "method"> {
+type FormProps = Omit<ComponentProps<typeof RRForm>, "method"> & {
   method?: "post" | "get"
-  action?: string
 }
 
-export function Form({ method = "post", action, children, ...props }: FormProps) {
+export function Form({ method = "post", children, ...props }: FormProps) {
   const navigation = useNavigation()
   const isPending = navigation.state === "submitting"
 
   return (
     <FormContext.Provider value={{ isPending }}>
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <RRForm method={method} {...(action !== undefined ? { action } : {})} {...(props as any)}>
+      <RRForm method={method} {...props}>
         {children}
       </RRForm>
     </FormContext.Provider>

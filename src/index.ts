@@ -77,6 +77,9 @@ export { DataListItem } from "./ui/data-view/DataListItem"
 export { DataGrid } from "./ui/data-view/DataGrid"
 export { MetadataList } from "./ui/data-view/MetadataList"
 
+// Routing
+export { defineRouteAction } from "./routing/defineRouteAction"
+
 // Interaction
 export { ActionSurface } from "./ui/interaction/ActionSurface"
 export { ActionBar } from "./ui/interaction/ActionBar"
@@ -84,6 +87,3 @@ export { BottomActionBar } from "./ui/interaction/BottomActionBar"
 export { ConfirmAction } from "./ui/interaction/ConfirmAction"
 export { SheetOrPopover } from "./ui/interaction/SheetOrPopover"
 
-// DB context / offline query
-export { DbProvider, useDb } from "./ui/db-context"
-export { useDbQuery } from "./ui/use-db-query"

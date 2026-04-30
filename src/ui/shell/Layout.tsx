@@ -1,9 +1,9 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState, useMemo, type ReactNode } from "react";
 import { Toaster } from "../primitives/Toast.js";
 import { useLocation, useNavigate } from "react-router";
 import { Menu } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useNavigation } from "./navContext.js";
+import { NavigationContext } from "./navContext.js";
 import { MobileMenu } from "./MobileMenu.js";
 import { MobileBottomNav } from "./MobileBottomNav.js";
 import { isActiveRoute, type NavItem } from "./navItems.js";
@@ -16,8 +16,6 @@ type LayoutProps = {
   children: ReactNode;
   mobilePattern?: "top-tabs" | "bottom-tabs";
   menuNavItems?: readonly NavItem[];
-  menuOpen?: boolean;
-  onMenuClose?: () => void;
 };
 
 export function Layout({
@@ -27,12 +25,11 @@ export function Layout({
   children,
   mobilePattern = "top-tabs",
   menuNavItems = [],
-  menuOpen = false,
-  onMenuClose = () => {},
 }: LayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { openMenu } = useNavigation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const navContext = useMemo(() => ({ openMenu: () => setMenuOpen(true) }), []);
   const [direction, setDirection] = useState(0);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
@@ -81,6 +78,7 @@ export function Layout({
   const animationKey = isMainView ? location.pathname : "__secondary__";
 
   return (
+    <NavigationContext.Provider value={navContext}>
     <div className="flex h-full bg-background">
       {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-shrink-0">
@@ -95,7 +93,7 @@ export function Layout({
           <header className="md:hidden sticky top-0 z-40 flex items-center gap-1 min-h-14 px-2 border-b border-border bg-card/90 backdrop-blur-sm">
             <button
               type="button"
-              onClick={openMenu}
+              onClick={() => setMenuOpen(true)}
               className="inline-flex items-center justify-center w-9 h-9 border border-border rounded-[10px] bg-card text-foreground cursor-pointer flex-shrink-0"
               aria-label="Open menu"
             >
@@ -169,10 +167,11 @@ export function Layout({
 
       {/* Mobile hamburger drawer — top-tabs pattern only */}
       {mobilePattern === "top-tabs" && (
-        <MobileMenu brand={brand} isOpen={menuOpen} onClose={onMenuClose} navItems={menuNavItems} />
+        <MobileMenu brand={brand} isOpen={menuOpen} onClose={() => setMenuOpen(false)} navItems={menuNavItems} />
       )}
 
       <Toaster />
     </div>
+    </NavigationContext.Provider>
   );
 }

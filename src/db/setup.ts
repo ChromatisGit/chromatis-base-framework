@@ -1,10 +1,5 @@
-import {
-  latestRuntimeMigrationVersion,
-  runtimeMigrations,
-  runtimeSeedAssets,
-  type RuntimeMigrationAsset,
-} from "./runtime-sql.js";
 import { DatabaseSetupError, toDatabaseSetupError } from "./errors.js";
+import type { MigrationAsset, SeedAsset } from "./types.js";
 
 type QueryRow = Record<string, unknown>;
 
@@ -17,10 +12,12 @@ export type SetupTransactionExecutor = <T>(
   fn: (query: SetupQueryExecutor) => Promise<T>,
 ) => Promise<T>;
 
-type EnsureDatabaseReadyOptions = {
-  autoInitEnabled: boolean;
+type InternalOptions = {
+  autoApply: boolean;
   connectionKey: string;
   context: string;
+  migrations: readonly MigrationAsset[];
+  seeds: readonly SeedAsset[];
   query: SetupQueryExecutor;
   transaction: SetupTransactionExecutor;
 };
@@ -29,253 +26,193 @@ type ProbeState = {
   state: "uninitialized" | "ready" | "outdated";
   appliedVersions: Set<string>;
   latestAppliedVersion: string | null;
-  pendingMigrations: RuntimeMigrationAsset[];
+  pendingMigrations: readonly MigrationAsset[];
 };
 
 const READY = Symbol("ready");
 const readinessCache = new Map<string, Promise<void> | typeof READY>();
 const MIGRATION_LOCK_NAMESPACE = 23117;
 const MIGRATION_LOCK_KEY = 40873;
-const _rawBaseline = runtimeMigrations[0];
-if (!_rawBaseline) throw new Error("Missing runtime baseline migration.");
-const baselineMigration: RuntimeMigrationAsset = _rawBaseline;
 
-function logSetupPhase(
+function getCacheKey(connectionKey: string, latestVersion: string): string {
+  return `${connectionKey}::${latestVersion}`;
+}
+
+function getLatestVersion(migrations: readonly MigrationAsset[]): string {
+  return migrations[migrations.length - 1]?.version ?? "none";
+}
+
+function getPending(
+  migrations: readonly MigrationAsset[],
+  applied: Set<string>,
+): MigrationAsset[] {
+  return migrations.filter((m) => !applied.has(m.version));
+}
+
+function log(
   context: string,
   phase: "probe" | "lock" | "migrate" | "seed" | "ready" | "failed",
   details?: Record<string, unknown>,
 ): void {
-  console.info("[db/setup]", phase, {
-    context,
-    ...(details ?? {}),
-  });
+  console.info("[db/setup]", phase, { context, ...(details ?? {}) });
 }
 
-function getPendingMigrations(appliedVersions: Set<string>): RuntimeMigrationAsset[] {
-  return runtimeMigrations.filter((migration) => !appliedVersions.has(migration.version));
-}
-
-function getCacheKey(connectionKey: string): string {
-  return `${connectionKey}::${latestRuntimeMigrationVersion}`;
-}
-
-async function probeDatabaseState(query: SetupQueryExecutor): Promise<ProbeState> {
-  const markerTableRows = await query(
+async function probeDatabaseState(
+  query: SetupQueryExecutor,
+  migrations: readonly MigrationAsset[],
+): Promise<ProbeState> {
+  const tableRows = await query(
     "SELECT to_regclass('public.app_schema_migrations')::text AS table_name",
   );
+  const tableName = tableRows[0]?.table_name;
 
-  const markerTableName = markerTableRows[0]?.table_name;
-  if (typeof markerTableName !== "string" || markerTableName.length === 0) {
+  if (typeof tableName !== "string" || tableName.length === 0) {
     return {
       state: "uninitialized",
       appliedVersions: new Set(),
       latestAppliedVersion: null,
-      pendingMigrations: [...runtimeMigrations],
+      pendingMigrations: [...migrations],
     };
   }
 
   const rows = await query(
     "SELECT version FROM app_schema_migrations ORDER BY applied_at ASC, version ASC",
   );
-
   const appliedVersions = new Set(
     rows
-      .map((row) => row.version)
-      .filter((version): version is string => typeof version === "string" && version.length > 0),
+      .map((r) => r.version)
+      .filter((v): v is string => typeof v === "string" && v.length > 0),
   );
 
-  if (!appliedVersions.has(baselineMigration.version)) {
+  const baseline = migrations[0];
+  if (!baseline || !appliedVersions.has(baseline.version)) {
     return {
       state: "uninitialized",
       appliedVersions,
       latestAppliedVersion: null,
-      pendingMigrations: [...runtimeMigrations],
+      pendingMigrations: [...migrations],
     };
   }
 
-  const pendingMigrations = getPendingMigrations(appliedVersions);
-  const appliedList = runtimeMigrations.filter((migration) => appliedVersions.has(migration.version));
-  const latestAppliedVersion = appliedList[appliedList.length - 1]?.version ?? null;
+  const pending = getPending(migrations, appliedVersions);
+  const applied = migrations.filter((m) => appliedVersions.has(m.version));
 
   return {
-    state: pendingMigrations.length === 0 ? "ready" : "outdated",
+    state: pending.length === 0 ? "ready" : "outdated",
     appliedVersions,
-    latestAppliedVersion,
-    pendingMigrations,
+    latestAppliedVersion: applied[applied.length - 1]?.version ?? null,
+    pendingMigrations: pending,
   };
-}
-
-async function executeSqlBatch(
-  query: SetupQueryExecutor,
-  sql: string,
-): Promise<void> {
-  const trimmed = sql.trim();
-  if (!trimmed) {
-    return;
-  }
-
-  await query(trimmed);
 }
 
 async function insertMigrationMarker(
   query: SetupQueryExecutor,
-  migration: RuntimeMigrationAsset,
+  migration: MigrationAsset,
 ): Promise<void> {
   await query(
-    [
-      "INSERT INTO app_schema_migrations (version, description)",
-      "VALUES ($1, $2)",
-      "ON CONFLICT (version) DO NOTHING",
-    ].join(" "),
+    "INSERT INTO app_schema_migrations (version, description) VALUES ($1, $2) ON CONFLICT (version) DO NOTHING",
     [migration.version, migration.description],
   );
 }
 
-async function applyBaseline(
+async function applyMigrations(
   context: string,
   query: SetupQueryExecutor,
-  appliedVersions: Set<string>,
+  migrations: readonly MigrationAsset[],
+  seeds: readonly SeedAsset[],
+  applied: Set<string>,
+  isFirstRun: boolean,
 ): Promise<void> {
-  logSetupPhase(context, "migrate", {
-    version: baselineMigration.version,
-    description: baselineMigration.description,
-  });
-  try {
-    await executeSqlBatch(query, baselineMigration.sql);
-  } catch (error) {
-    throw toDatabaseSetupError(error, { context, phase: "migrate" });
-  }
-
-  for (const seed of runtimeSeedAssets) {
-    logSetupPhase(context, "seed", { name: seed.name });
+  for (const migration of getPending(migrations, applied)) {
+    log(context, "migrate", { version: migration.version, description: migration.description });
+    const trimmed = migration.sql.trim();
     try {
-      await executeSqlBatch(query, seed.sql);
-    } catch (error) {
-      throw toDatabaseSetupError(error, { context, phase: "seed" });
-    }
-  }
-
-  try {
-    await insertMigrationMarker(query, baselineMigration);
-  } catch (error) {
-    throw toDatabaseSetupError(error, { context, phase: "migrate" });
-  }
-
-  appliedVersions.add(baselineMigration.version);
-}
-
-async function applyPendingMigrations(
-  context: string,
-  query: SetupQueryExecutor,
-  appliedVersions: Set<string>,
-): Promise<void> {
-  for (const migration of getPendingMigrations(appliedVersions)) {
-    logSetupPhase(context, "migrate", {
-      version: migration.version,
-      description: migration.description,
-    });
-    try {
-      await executeSqlBatch(query, migration.sql);
+      if (trimmed) await query(trimmed);
       await insertMigrationMarker(query, migration);
     } catch (error) {
       throw toDatabaseSetupError(error, { context, phase: "migrate" });
     }
+    applied.add(migration.version);
 
-    appliedVersions.add(migration.version);
+    // Apply seeds only after the very first migration (baseline init)
+    if (isFirstRun && applied.size === 1) {
+      for (const seed of seeds) {
+        log(context, "seed", { name: seed.name });
+        const seedSql = seed.sql.trim();
+        try {
+          if (seedSql) await query(seedSql);
+        } catch (error) {
+          throw toDatabaseSetupError(error, { context, phase: "seed" });
+        }
+      }
+    }
   }
 }
 
-async function runEnsureDatabaseReady(options: EnsureDatabaseReadyOptions): Promise<void> {
-  logSetupPhase(options.context, "probe");
+async function run(options: InternalOptions): Promise<void> {
+  const { context, migrations, seeds, query, transaction } = options;
 
-  let initialState: ProbeState;
+  log(context, "probe");
+
+  let initial: ProbeState;
   try {
-    initialState = await probeDatabaseState(options.query);
+    initial = await probeDatabaseState(query, migrations);
   } catch (error) {
-    throw toDatabaseSetupError(error, { context: options.context, phase: "probe" });
+    throw toDatabaseSetupError(error, { context, phase: "probe" });
   }
 
-  if (initialState.state === "ready") {
-    logSetupPhase(options.context, "ready", {
-      state: initialState.state,
-      version: initialState.latestAppliedVersion,
-    });
+  if (initial.state === "ready") {
+    log(context, "ready", { version: initial.latestAppliedVersion });
     return;
   }
 
   try {
-    await options.transaction(async (query) => {
-      logSetupPhase(options.context, "lock", {
-        state: initialState.state,
-        pendingVersions: initialState.pendingMigrations.map((migration) => migration.version),
+    await transaction(async (txQuery) => {
+      log(context, "lock", {
+        state: initial.state,
+        pending: initial.pendingMigrations.map((m) => m.version),
       });
       try {
-        await query("SELECT pg_advisory_xact_lock($1, $2)", [
+        await txQuery("SELECT pg_advisory_xact_lock($1, $2)", [
           MIGRATION_LOCK_NAMESPACE,
           MIGRATION_LOCK_KEY,
         ]);
       } catch (error) {
-        throw toDatabaseSetupError(error, { context: options.context, phase: "lock" });
+        throw toDatabaseSetupError(error, { context, phase: "lock" });
       }
 
-      const lockedState = await probeDatabaseState(query);
-      const appliedVersions = new Set(lockedState.appliedVersions);
+      const locked = await probeDatabaseState(txQuery, migrations);
+      const isFirstRun = locked.state === "uninitialized";
+      const applied = new Set(locked.appliedVersions);
 
-      if (!appliedVersions.has(baselineMigration.version)) {
-        await applyBaseline(options.context, query, appliedVersions);
-      }
-
-      await applyPendingMigrations(options.context, query, appliedVersions);
+      await applyMigrations(context, txQuery, migrations, seeds, applied, isFirstRun);
     });
   } catch (error) {
-    if (error instanceof DatabaseSetupError) {
-      throw error;
-    }
-
-    throw toDatabaseSetupError(error, { context: options.context, phase: "failed" });
+    if (error instanceof DatabaseSetupError) throw error;
+    throw toDatabaseSetupError(error, { context, phase: "failed" });
   }
 
-  logSetupPhase(options.context, "ready", {
-    state: "ready",
-    version: latestRuntimeMigrationVersion,
-  });
+  log(context, "ready", { version: getLatestVersion(migrations) });
 }
 
-export async function ensureDatabaseReady(
-  options: EnsureDatabaseReadyOptions,
-): Promise<void> {
-  if (!options.autoInitEnabled) {
-    return;
-  }
+export async function ensureDatabaseReady(options: InternalOptions): Promise<void> {
+  if (!options.autoApply) return;
+  if (options.migrations.length === 0) return;
 
-  const cacheKey = getCacheKey(options.connectionKey);
+  const cacheKey = getCacheKey(options.connectionKey, getLatestVersion(options.migrations));
   const cached = readinessCache.get(cacheKey);
 
-  if (cached === READY) {
-    return;
-  }
+  if (cached === READY) return;
+  if (cached) return cached;
 
-  if (cached) {
-    return cached;
-  }
-
-  const promise = runEnsureDatabaseReady(options)
-    .then(() => {
-      readinessCache.set(cacheKey, READY);
-    })
+  const promise = run(options)
+    .then(() => { readinessCache.set(cacheKey, READY); })
     .catch((error: unknown) => {
       readinessCache.delete(cacheKey);
-
       const setupError = error instanceof DatabaseSetupError
         ? error
         : toDatabaseSetupError(error, { context: options.context, phase: "failed" });
-
-      logSetupPhase(options.context, "failed", {
-        phase: setupError.phase,
-        code: setupError.code,
-        message: setupError.message,
-      });
-
+      log(options.context, "failed", { phase: setupError.phase, message: setupError.message });
       throw setupError;
     });
 

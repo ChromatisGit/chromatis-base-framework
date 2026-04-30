@@ -1,18 +1,18 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 import postgres from "postgres";
-
-import {
-  runtimeMigrations,
-  runtimeSeedAssets,
-  type RuntimeMigrationAsset,
-} from "../../src/db/runtime-sql.ts";
 
 const MIGRATION_LOCK_NAMESPACE = 23117;
 const MIGRATION_LOCK_KEY = 40873;
 
 type DbCommand = "init" | "update";
+
+interface MigrationFile {
+  version: string;
+  description: string;
+  sql: string;
+}
 
 function loadEnvFile(filePath: string): void {
   if (!existsSync(filePath)) return;
@@ -30,8 +30,8 @@ function loadEnvFile(filePath: string): void {
     let value = normalized.slice(separatorIndex + 1).trim();
 
     if (
-      (value.startsWith("\"") && value.endsWith("\""))
-      || (value.startsWith("'") && value.endsWith("'"))
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
     ) {
       value = value.slice(1, -1);
     }
@@ -46,103 +46,120 @@ function loadLocalEnv(): void {
     loadEnvFile(path.resolve(process.cwd(), explicitEnvFile));
     return;
   }
-
   loadEnvFile(path.resolve(process.cwd(), ".env"));
   loadEnvFile(path.resolve(process.cwd(), ".env.local"));
 }
 
 function getDatabaseUrl(): string {
   loadLocalEnv();
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    throw new Error("Missing DATABASE_URL. Set it in the environment, .env, or DB_ENV_FILE.");
-  }
-  return databaseUrl;
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("Missing DATABASE_URL. Set it in the environment, .env, or DB_ENV_FILE.");
+  return url;
+}
+
+const MIGRATION_FILE_RE = /^(\d+\.\d+\.\d+)__([a-z0-9][a-z0-9_-]*)\.sql$/i;
+
+function loadMigrations(migrationsDir: string): MigrationFile[] {
+  if (!existsSync(migrationsDir)) return [];
+
+  return readdirSync(migrationsDir, { withFileTypes: true })
+    .filter((e) => e.isFile() && MIGRATION_FILE_RE.test(e.name))
+    .map((e) => e.name)
+    .sort((a, b) => a.localeCompare(b))
+    .map((name) => {
+      const match = MIGRATION_FILE_RE.exec(name)!;
+      return {
+        version: match[1]!,
+        description: match[2]!.replace(/-/g, " "),
+        sql: readFileSync(path.join(migrationsDir, name), "utf8"),
+      };
+    });
+}
+
+function loadSeeds(seedsDir: string): { name: string; sql: string }[] {
+  if (!existsSync(seedsDir)) return [];
+
+  return readdirSync(seedsDir, { withFileTypes: true })
+    .filter((e) => e.isFile() && e.name.endsWith(".sql"))
+    .map((e) => e.name)
+    .sort((a, b) => a.localeCompare(b))
+    .map((name) => ({
+      name,
+      sql: readFileSync(path.join(seedsDir, name), "utf8"),
+    }));
 }
 
 async function ensureMigrationTable(sql: postgres.Sql): Promise<void> {
   await sql`
     CREATE TABLE IF NOT EXISTS app_schema_migrations (
-      version text PRIMARY KEY,
-      description text NOT NULL,
-      applied_at timestamptz NOT NULL DEFAULT now()
+      version     text        PRIMARY KEY,
+      description text        NOT NULL,
+      applied_at  timestamptz NOT NULL DEFAULT now()
     )
   `;
 }
 
 async function getAppliedVersions(sql: postgres.Sql): Promise<Set<string>> {
   const rows = await sql<{ version: string }[]>`
-    SELECT version
-    FROM app_schema_migrations
-    ORDER BY applied_at ASC, version ASC
+    SELECT version FROM app_schema_migrations ORDER BY applied_at ASC, version ASC
   `;
-
-  return new Set(rows.map((row) => row.version));
+  return new Set(rows.map((r) => r.version));
 }
 
-async function applyMigration(
-  sql: postgres.Sql,
-  migration: RuntimeMigrationAsset,
+export async function runDbMigrations(
+  command: DbCommand,
+  migrationsDir = path.resolve(process.cwd(), "sql/migrations"),
+  seedsDir = path.resolve(process.cwd(), "sql/seeds"),
 ): Promise<void> {
-  const trimmedSql = migration.sql.trim();
-  if (trimmedSql) {
-    await sql.unsafe(trimmedSql);
-  }
-
-  await sql`
-    INSERT INTO app_schema_migrations (version, description)
-    VALUES (${migration.version}, ${migration.description})
-    ON CONFLICT (version) DO NOTHING
-  `;
-}
-
-async function applySeed(sql: postgres.Sql, name: string, seedSql: string): Promise<void> {
-  const trimmedSql = seedSql.trim();
-  if (!trimmedSql) return;
-
-  console.info(`[db] Applying seed ${name}`);
-  await sql.unsafe(trimmedSql);
-}
-
-export async function runDbMigrations(command: DbCommand): Promise<void> {
   const sql = postgres(getDatabaseUrl(), { max: 1 });
+  const migrations = loadMigrations(migrationsDir);
+  const seeds = loadSeeds(seedsDir);
 
   try {
     await sql.begin(async (tx) => {
       await tx`SELECT pg_advisory_xact_lock(${MIGRATION_LOCK_NAMESPACE}, ${MIGRATION_LOCK_KEY})`;
       await ensureMigrationTable(tx);
 
-      const appliedVersions = await getAppliedVersions(tx);
-      if (command === "init" && appliedVersions.size > 0) {
-        console.info("[db] Database is already initialized. Run dbUpdate to apply pending migrations.");
+      const applied = await getAppliedVersions(tx);
+      if (command === "init" && applied.size > 0) {
+        console.info("[db] Already initialized. Run dbUpdate to apply pending migrations.");
         return;
       }
 
-      if (runtimeMigrations.length === 0) {
-        console.info("[db] Migration table is ready. No embedded runtime migrations found.");
+      if (migrations.length === 0) {
+        console.info("[db] No migration files found.");
         return;
       }
 
-      let appliedCount = 0;
-      for (const migration of runtimeMigrations) {
-        if (appliedVersions.has(migration.version)) continue;
+      let count = 0;
+      for (const migration of migrations) {
+        if (applied.has(migration.version)) continue;
 
-        console.info(`[db] Applying migration ${migration.version}: ${migration.description}`);
-        await applyMigration(tx, migration);
-        appliedVersions.add(migration.version);
-        appliedCount += 1;
+        console.info(`[db] Applying ${migration.version}: ${migration.description}`);
+        const trimmed = migration.sql.trim();
+        if (trimmed) await tx.unsafe(trimmed);
+        await tx`
+          INSERT INTO app_schema_migrations (version, description)
+          VALUES (${migration.version}, ${migration.description})
+          ON CONFLICT (version) DO NOTHING
+        `;
+        applied.add(migration.version);
+        count += 1;
 
-        if (command === "init" && appliedCount === 1) {
-          for (const seed of runtimeSeedAssets) {
-            await applySeed(tx, seed.name, seed.sql);
+        // Seeds run once, after the baseline migration
+        if (command === "init" && count === 1) {
+          for (const seed of seeds) {
+            console.info(`[db] Applying seed ${seed.name}`);
+            const seedSql = seed.sql.trim();
+            if (seedSql) await tx.unsafe(seedSql);
           }
         }
       }
 
-      if (appliedCount === 0) {
-        console.info("[db] Database schema is up to date.");
+      if (count === 0) {
+        console.info("[db] Schema is up to date.");
       } else {
-        console.info(`[db] Applied ${appliedCount} migration${appliedCount === 1 ? "" : "s"}.`);
+        console.info(`[db] Applied ${count} migration${count === 1 ? "" : "s"}.`);
       }
     });
   } finally {

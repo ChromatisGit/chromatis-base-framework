@@ -2,15 +2,18 @@
  * Architecture boundary checker.
  *
  * Derives layer directories from tsconfig path aliases, so it works with
- * any project structure — whether platform lives at src/platform/ or .shared/src/.
+ * any project structure.
  *
  * Required tsconfig aliases (at minimum):
- *   @platform/*  → the shared platform layer
  *   @features/*  → feature vertical slices
  *   @core/*      → app-level composition layer
  *
+ * Optional tsconfig aliases:
+ *   @platform/*  → shared platform layer (omit if not present)
+ *
  * Rules enforced:
  *   platform → must not import features, core, or app
+ *   core     → must not import features
  *   feature A → must not import feature B
  */
 
@@ -83,7 +86,7 @@ function readTsConfig(): ts.ParsedCommandLine {
 }
 
 function resolveDirsFromConfig(config: ts.ParsedCommandLine): {
-  platformDir: string;
+  platformDir: string | null;
   featuresDir: string;
   coreDir: string | null;
 } {
@@ -93,21 +96,17 @@ function resolveDirsFromConfig(config: ts.ParsedCommandLine): {
   const featuresPatterns = paths["@features/*"];
   const corePatterns = paths["@core/*"];
 
-  if (!platformPatterns || platformPatterns.length === 0) {
-    fail("tsconfig.json must define @platform/* path alias for boundary checking.");
-  }
   if (!featuresPatterns || featuresPatterns.length === 0) {
     fail("tsconfig.json must define @features/* path alias for boundary checking.");
   }
 
-  const platformDir = resolveAliasDir(platformPatterns!);
+  const platformDir = platformPatterns ? resolveAliasDir(platformPatterns) : null;
   const featuresDir = resolveAliasDir(featuresPatterns!);
   const coreDir = corePatterns ? resolveAliasDir(corePatterns) : null;
 
-  if (!platformDir) fail("Could not resolve @platform/* path alias to a directory.");
   if (!featuresDir) fail("Could not resolve @features/* path alias to a directory.");
 
-  return { platformDir: platformDir!, featuresDir: featuresDir!, coreDir };
+  return { platformDir, featuresDir: featuresDir!, coreDir };
 }
 
 function getFeatureName(filePath: string, featuresDir: string): string | null {
@@ -119,20 +118,24 @@ function getFeatureName(filePath: string, featuresDir: string): string | null {
 
 function classifyFile(
   filePath: string,
-  platformDir: string,
+  platformDir: string | null,
   featuresDir: string,
   coreDir: string | null,
 ): FileLayer {
   const normalized = normalizePath(filePath);
 
-  if (isWithin(normalized, platformDir)) return { kind: "platform" };
+  if (platformDir && isWithin(normalized, platformDir)) return { kind: "platform" };
 
   if (isWithin(normalized, featuresDir)) {
     const featureName = getFeatureName(normalized, featuresDir);
     return featureName ? { kind: "feature", featureName } : { kind: "core" };
   }
 
-  if (coreDir && isWithin(normalized, coreDir)) return { kind: "core" };
+  if (coreDir && isWithin(normalized, coreDir)) {
+    const relToCore = path.relative(coreDir, normalized);
+    if (relToCore.split(path.sep).includes("routes")) return { kind: "app" };
+    return { kind: "core" };
+  }
 
   if (isWithin(normalized, APP_DIR)) return { kind: "app" };
 
@@ -200,6 +203,13 @@ function getViolationMessage(sourceLayer: FileLayer, targetLayer: FileLayer): st
     if (targetLayer.kind === "feature") return "Platform code must not import feature code.";
     if (targetLayer.kind === "core") return "Platform code must not import core code.";
     if (targetLayer.kind === "app") return "Platform code must not import app code.";
+    return null;
+  }
+
+  if (sourceLayer.kind === "core") {
+    if (targetLayer.kind === "feature") {
+      return "Core code must not import feature code.";
+    }
     return null;
   }
 
