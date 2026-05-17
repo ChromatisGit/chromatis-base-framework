@@ -7,6 +7,8 @@ import {
 } from "react";
 import { useDb } from "./db-context.js";
 
+export const SYNC_COMPLETE_EVENT = "platform:synced";
+
 interface DbQueryState<T> {
   db: IDBDatabase | null;
   data: T | null;
@@ -60,8 +62,8 @@ export function useDbQuery<T>(
     function handleSync() {
       void runLoad();
     }
-    window.addEventListener("desk:synced", handleSync);
-    return () => window.removeEventListener("desk:synced", handleSync);
+    window.addEventListener(SYNC_COMPLETE_EVENT, handleSync);
+    return () => window.removeEventListener(SYNC_COMPLETE_EVENT, handleSync);
   }, [runLoad]);
 
   return { db, data, loading, error, refresh: runLoad };

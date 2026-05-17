@@ -1,0 +1,20 @@
+@import './theme.css';
+@import './animations.css';
+
+/* Global resets */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+#root {
+  height: 100%;
+}

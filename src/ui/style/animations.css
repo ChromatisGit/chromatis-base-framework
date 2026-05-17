@@ -1,0 +1,262 @@
+@keyframes slideFromTextInput {
+  from {
+    transform: translateY(200px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-from-text-input {
+  animation: slideFromTextInput 0.4s ease-out;
+}
+
+@keyframes pulseOnce {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+.animate-pulse-once {
+  animation: pulseOnce 0.4s ease-out;
+}
+
+@keyframes dotAppear {
+  0% {
+    transform: translateX(40px) scale(0);
+    opacity: 0;
+    filter: drop-shadow(0 0 0px currentColor);
+  }
+  33% {
+    transform: translateX(40px) scale(0);
+    opacity: 0;
+    filter: drop-shadow(0 0 0px currentColor);
+  }
+  50% {
+    transform: translateX(0) scale(1.3);
+    opacity: 1;
+    filter: drop-shadow(0 0 8px currentColor);
+  }
+  70% {
+    transform: translateX(0) scale(0.9);
+    filter: drop-shadow(0 0 6px currentColor);
+  }
+  85% {
+    transform: translateX(0) scale(1.05);
+    filter: drop-shadow(0 0 3px currentColor);
+  }
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+    filter: drop-shadow(0 0 0px currentColor);
+  }
+}
+
+.animate-dot-appear {
+  animation: dotAppear 0.8s ease-out;
+}
+
+.animate-dot-appear-first {
+  animation: dotAppear 0.8s ease-out 0.3s backwards;
+}
+
+@keyframes slideOutLeft {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.animate-slide-out-left {
+  animation: slideOutLeft 0.5s ease-out forwards;
+}
+
+@keyframes slideInFromTop {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-from-top {
+  animation: slideInFromTop 0.4s ease-out;
+}
+
+@keyframes slideOutLeftCard {
+  0% {
+    transform: translateX(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-120%) rotate(-5deg);
+    opacity: 0;
+  }
+}
+
+.animate-slide-out-left-card {
+  animation: slideOutLeftCard 0.3s ease-out forwards;
+}
+
+@keyframes slideOutRightCard {
+  0% {
+    transform: translateX(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(120%) rotate(5deg);
+    opacity: 0;
+  }
+}
+
+.animate-slide-out-right-card {
+  animation: slideOutRightCard 0.3s ease-out forwards;
+}
+
+@keyframes slideInCard {
+  0% {
+    transform: translateY(20px) scale(0.95);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-card {
+  animation: slideInCard 0.3s ease-out;
+}
+
+@keyframes slideOutDownCard {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(20px) scale(0.95);
+    opacity: 0;
+  }
+}
+
+.animate-slide-out-down-card {
+  animation: slideOutDownCard 0.25s ease-in forwards;
+}
+
+@keyframes slideInSheet {
+  0% {
+    transform: translateY(100%);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in-sheet {
+  animation: slideInSheet 0.3s ease-out;
+}
+
+@keyframes slideOutDownSheet {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(100%);
+  }
+}
+
+.animate-slide-out-down-sheet {
+  animation: slideOutDownSheet 0.25s ease-in forwards;
+}
+
+@keyframes sheetContentInRight {
+  0% {
+    transform: translateX(14%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.animate-sheet-content-in-right {
+  animation: sheetContentInRight 0.22s ease-out;
+}
+
+@keyframes sheetContentOutLeft {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-14%);
+  }
+}
+
+.animate-sheet-content-out-left {
+  animation: sheetContentOutLeft 0.22s ease-out forwards;
+}
+
+@keyframes sheetContentInLeft {
+  0% {
+    transform: translateX(-14%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.animate-sheet-content-in-left {
+  animation: sheetContentInLeft 0.22s ease-out;
+}
+
+@keyframes sheetContentOutRight {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(14%);
+  }
+}
+
+.animate-sheet-content-out-right {
+  animation: sheetContentOutRight 0.22s ease-out forwards;
+}
+
+@keyframes fadeInTask {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-task {
+  animation: fadeInTask 0.4s ease-out backwards;
+}
+
+@keyframes taskExit {
+  0% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+}
+
+.animate-task-exit {
+  animation: taskExit 0.3s ease-out forwards;
+}

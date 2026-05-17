@@ -1,6 +1,7 @@
 import * as React from "react"
 import { createPortal } from "react-dom"
 import { cn } from "./cn"
+import { useOverlayMounting, useOverlayFocus } from "../lib/useOverlay"
 
 const DIALOG_ANIMATION_MS = 200
 
@@ -97,62 +98,8 @@ export function DialogContent({
 }: React.HTMLAttributes<HTMLDivElement>) {
   const { open, setOpen, triggerRef } = useDialogContext()
   const contentRef = React.useRef<HTMLDivElement>(null)
-  const [isMounted, setIsMounted] = React.useState(open)
-  const [visualState, setVisualState] = React.useState<"open" | "closed">(open ? "open" : "closed")
-
-  React.useEffect(() => {
-    if (open) {
-      setIsMounted(true)
-      setVisualState("closed")
-      let frameA = 0
-      let frameB = 0
-      frameA = window.requestAnimationFrame(() => {
-        frameB = window.requestAnimationFrame(() => setVisualState("open"))
-      })
-      return () => {
-        window.cancelAnimationFrame(frameA)
-        window.cancelAnimationFrame(frameB)
-      }
-    }
-
-    setVisualState("closed")
-    if (!isMounted) return undefined
-
-    const timeout = window.setTimeout(() => setIsMounted(false), DIALOG_ANIMATION_MS + 20)
-    return () => window.clearTimeout(timeout)
-  }, [open, isMounted])
-
-  React.useEffect(() => {
-    if (!open) return undefined
-
-    const previousOverflow = document.body.style.overflow
-    const previousFocus = document.activeElement as HTMLElement | null
-    document.body.style.overflow = "hidden"
-
-    const frame = window.requestAnimationFrame(() => {
-      const target =
-        contentRef.current?.querySelector<HTMLElement>(
-          "[data-autofocus], button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])",
-        ) ?? contentRef.current
-      target?.focus()
-    })
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault()
-        setOpen(false)
-      }
-    }
-
-    window.addEventListener("keydown", onKeyDown)
-
-    return () => {
-      window.cancelAnimationFrame(frame)
-      window.removeEventListener("keydown", onKeyDown)
-      document.body.style.overflow = previousOverflow
-      ;(triggerRef.current ?? previousFocus)?.focus?.()
-    }
-  }, [open, setOpen, triggerRef])
+  const { isMounted, visualState } = useOverlayMounting(open, DIALOG_ANIMATION_MS)
+  useOverlayFocus(contentRef, open, setOpen, triggerRef)
 
   if (!isMounted || typeof document === "undefined") return null
 
