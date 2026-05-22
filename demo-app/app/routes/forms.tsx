@@ -4,7 +4,7 @@ import {
   Form, FormSection, TextField, TextAreaField,
   SelectField, SwitchField, CheckboxField, FormActions,
   Button, Stack,
-} from "@platform/framework"
+} from "@chromatis/base"
 
 export default function FormsDemo() {
   const [notifications, setNotifications] = useState(true)

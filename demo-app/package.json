@@ -8,7 +8,7 @@
     "typecheck": "react-router typegen && tsc"
   },
   "dependencies": {
-    "@platform/framework": "file:..",
+    "@chromatis/base": "file:..",
     "tw-animate-css": "^1.2.5",
     "@fontsource/plus-jakarta-sans": "^5.2.8",
     "lucide-react": "^1.7.0",

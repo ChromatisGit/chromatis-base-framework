@@ -2,7 +2,7 @@ import { useState } from "react"
 import {
   Page, PageHeader, Section, Stack, Inline,
   Button, Badge, Card, Input, Switch, Checkbox, Select,
-} from "@platform/framework"
+} from "@chromatis/base"
 import { Plus, Trash2, Download } from "lucide-react"
 
 export default function PrimitivesDemo() {

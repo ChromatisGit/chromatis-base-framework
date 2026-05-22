@@ -7,15 +7,15 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: "@platform/framework/styles",
+        find: "@chromatis/base/styles",
         replacement: fileURLToPath(new URL("../src/ui/style/app.css", import.meta.url)),
       },
       {
-        find: "@platform/framework/component",
+        find: "@chromatis/base/component",
         replacement: fileURLToPath(new URL("../src/component.ts", import.meta.url)),
       },
       {
-        find: "@platform/framework",
+        find: "@chromatis/base",
         replacement: fileURLToPath(new URL("../src/index.ts", import.meta.url)),
       },
     ],
@@ -29,7 +29,7 @@ export default defineConfig({
   },
   optimizeDeps: {
     force: true,
-    exclude: ["@platform/framework"],
+    exclude: ["@chromatis/base"],
     esbuildOptions: {
       jsx: "automatic",
     },

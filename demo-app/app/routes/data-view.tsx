@@ -2,7 +2,7 @@ import {
   Page, PageHeader, Section, Stack, Inline,
   StateView, DataList, DataListItem, DataGrid, MetadataList,
   Card, Badge, Button,
-} from "@platform/framework"
+} from "@chromatis/base"
 import { FileText, Folder, Settings, User, Trash2 } from "lucide-react"
 
 export default function DataViewDemo() {

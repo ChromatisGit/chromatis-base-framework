@@ -1,5 +1,5 @@
 import { Link } from "react-router"
-import { Page, PageHeader, ResponsiveColumns, Card } from "@platform/framework"
+import { Page, PageHeader, ResponsiveColumns, Card } from "@chromatis/base"
 import {
   Columns2, PanelLeft, FormInput, Square,
   LayoutGrid, MessageSquare, List, MousePointer2,
@@ -21,7 +21,7 @@ export default function Index() {
     <Page title="Platform Demo">
       <PageHeader
         title="Platform Demo"
-        subtitle="Component and layout showcase for @platform/framework"
+        subtitle="Component and layout showcase for @chromatis/base"
       />
       <ResponsiveColumns minWidth={260} gap="4">
         {sections.map((s) => (

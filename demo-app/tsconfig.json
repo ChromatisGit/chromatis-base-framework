@@ -16,8 +16,8 @@
     "exactOptionalPropertyTypes": true,
     "rootDirs": [".", "./.react-router/types"],
     "paths": {
-      "@platform/framework": ["../src/index.ts"],
-      "@platform/framework/component": ["../src/component.ts"]
+      "@chromatis/base": ["../src/index.ts"],
+      "@chromatis/base/component": ["../src/component.ts"]
     }
   }
 }

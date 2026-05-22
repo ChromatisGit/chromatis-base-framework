@@ -5,7 +5,7 @@ import {
   Sidebar,
   type NavItem,
   type SidebarBrand,
-} from "@platform/framework"
+} from "@chromatis/base"
 import {
   LayoutDashboard,
   Columns2,
@@ -21,7 +21,7 @@ import "@fontsource/plus-jakarta-sans/400.css"
 import "@fontsource/plus-jakarta-sans/500.css"
 import "@fontsource/plus-jakarta-sans/600.css"
 import "@fontsource/plus-jakarta-sans/700.css"
-import "@platform/framework/styles"
+import "@chromatis/base/styles"
 
 const brand: SidebarBrand = { name: "Platform Demo", initial: "P", href: "/" }
 

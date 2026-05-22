@@ -3,7 +3,7 @@ import {
   Page, PageHeader, Section,
   PanelLayout, Stack,
   Card, Badge, Button, DataList, DataListItem,
-} from "@platform/framework"
+} from "@chromatis/base"
 import { Filter } from "lucide-react"
 
 const tasks = [

@@ -4,7 +4,7 @@ import {
   Stack, Inline, ResponsiveColumns,
   ContentLayout, CenteredLayout, SwipeTabs,
   Card, Button, Badge,
-} from "@platform/framework"
+} from "@chromatis/base"
 
 export default function LayoutsDemo() {
   const [activeTab, setActiveTab] = useState("overview")

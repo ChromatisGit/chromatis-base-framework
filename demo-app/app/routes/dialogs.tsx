@@ -6,7 +6,7 @@ import {
   DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogBody,
   Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetFooter,
   Tabs, TabsList, TabsTrigger, TabsContent,
-} from "@platform/framework"
+} from "@chromatis/base"
 
 export default function DialogsDemo() {
   const [tab, setTab] = useState("details")

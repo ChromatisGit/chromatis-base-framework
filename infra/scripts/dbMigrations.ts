@@ -89,7 +89,7 @@ function loadSeeds(seedsDir: string): { name: string; sql: string }[] {
     }));
 }
 
-async function ensureMigrationTable(sql: postgres.Sql): Promise<void> {
+async function ensureMigrationTable(sql: postgres.Sql | postgres.TransactionSql): Promise<void> {
   await sql`
     CREATE TABLE IF NOT EXISTS app_schema_migrations (
       version     text        PRIMARY KEY,
@@ -99,7 +99,7 @@ async function ensureMigrationTable(sql: postgres.Sql): Promise<void> {
   `;
 }
 
-async function getAppliedVersions(sql: postgres.Sql): Promise<Set<string>> {
+async function getAppliedVersions(sql: postgres.Sql | postgres.TransactionSql): Promise<Set<string>> {
   const rows = await sql<{ version: string }[]>`
     SELECT version FROM app_schema_migrations ORDER BY applied_at ASC, version ASC
   `;

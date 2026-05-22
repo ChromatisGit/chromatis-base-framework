@@ -2,7 +2,7 @@ import { useState } from "react"
 import {
   Page, PageHeader, ListDetail, StateView, Stack,
   Card, Badge, ActionSurface,
-} from "@platform/framework"
+} from "@chromatis/base"
 
 interface Project {
   id: string

@@ -5,7 +5,7 @@ import {
   ConfirmAction, SheetOrPopover,
   Button, DataList, DataListItem,
   toast,
-} from "@platform/framework"
+} from "@chromatis/base"
 import { Trash2, Edit, Download, MoreHorizontal, Bell, Star, Share2 } from "lucide-react"
 
 export default function InteractionDemo() {
