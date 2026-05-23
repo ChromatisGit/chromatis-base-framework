@@ -4,18 +4,18 @@ Opinionated shared platform for React Router v7 apps. Provides shell components,
 
 ## Setup
 
-This package is not published to npm. Consume it as a `file:` dependency from a sibling directory:
+Install as a git dependency — no registry needed:
 
 ```json
 // your-app/package.json
 {
   "dependencies": {
-    "@chromatis/base": "file:../chromatis-base"
+    "@chromatis/base": "git+https://github.com/ChromatisGit/personal-base-framework.git"
   }
 }
 ```
 
-Run `bun install` — Bun creates a symlink at `node_modules/@chromatis/base`.
+Run `bun install` — Bun clones the repo and links it at `node_modules/@chromatis/base`.
 
 ## Package exports
 

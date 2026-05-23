@@ -4,10 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "bun run --cwd demo-app dev",
-    "build": "bun run --cwd demo-app build",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit && bun run --cwd demo-app typecheck",
+    "typecheck": "tsc --noEmit",
     "dbInit": "bun run infra/scripts/dbDocker.ts reset && bun run infra/scripts/dbInit.ts",
     "dbUpdate": "bun run infra/scripts/dbDocker.ts start && bun run infra/scripts/dbUpdate.ts"
   },
