@@ -22,7 +22,10 @@
     "./auth": "./src/auth.ts",
     "./vite": "./src/vite.ts",
     "./infra/tsconfig": "./infra/tsconfig.base.json",
-    "./infra/eslint": "./infra/eslint.config.base.js",
+    "./infra/eslint": {
+      "types": "./infra/eslint.config.base.d.ts",
+      "default": "./infra/eslint.config.base.js"
+    },
     "./infra/pwa/manifest": "./infra/pwa/manifest.base.json"
   },
   "peerDependencies": {
