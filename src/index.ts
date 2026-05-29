@@ -77,6 +77,10 @@ export { DataListItem } from "./ui/data-view/DataListItem"
 export { DataGrid } from "./ui/data-view/DataGrid"
 export { MetadataList } from "./ui/data-view/MetadataList"
 
+// Auth UI
+export { LoginForm } from "./ui/auth/LoginForm"
+export { RegisterForm } from "./ui/auth/RegisterForm"
+
 // Routing
 export { defineRouteAction } from "./routing/defineRouteAction"
 

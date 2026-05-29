@@ -14,6 +14,7 @@ interface Props {
   brand: SidebarBrand;
   mainNavItems: readonly NavItem[];
   secondaryNavItems?: readonly NavItem[];
+  footerNavItems?: readonly NavItem[];
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   collapsible?: boolean;
@@ -24,6 +25,7 @@ export function Sidebar({
   brand,
   mainNavItems,
   secondaryNavItems = [],
+  footerNavItems = [],
   collapsed,
   onCollapsedChange,
   collapsible = false,
@@ -124,6 +126,13 @@ export function Sidebar({
           <Sun size={18} className="flex-shrink-0 hidden dark:block" aria-hidden />
           {!collapsed && <span>Toggle theme</span>}
         </button>
+
+        {footerNavItems.length > 0 && (
+          <>
+            <div className="my-1 border-t border-border" />
+            {footerNavItems.map(renderNavItem)}
+          </>
+        )}
 
         {userSlot !== undefined && !collapsed && (
           <div className="mt-1">{userSlot}</div>

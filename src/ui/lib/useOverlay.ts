@@ -40,6 +40,7 @@ export function useOverlayFocus(
 
     const previousOverflow = document.body.style.overflow
     const previousFocus = document.activeElement as HTMLElement | null
+    const triggerEl = triggerRef.current
     document.body.style.overflow = "hidden"
 
     const frame = window.requestAnimationFrame(() => {
@@ -63,7 +64,7 @@ export function useOverlayFocus(
       window.cancelAnimationFrame(frame)
       window.removeEventListener("keydown", onKeyDown)
       document.body.style.overflow = previousOverflow
-      ;(triggerRef.current ?? previousFocus)?.focus?.()
+      ;(triggerEl ?? previousFocus)?.focus?.()
     }
   }, [open, setOpen, triggerRef, contentRef])
 }

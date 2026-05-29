@@ -35,7 +35,7 @@ export function defineRouteAction<T extends z.ZodTypeAny>(schema: T) {
     const fetcher = useFetcher();
 
     function submit(input: Input) {
-      void fetcher.submit(input, {
+      void fetcher.submit(input as Parameters<typeof fetcher.submit>[0], {
         method: "post",
         encType: "application/json",
       });

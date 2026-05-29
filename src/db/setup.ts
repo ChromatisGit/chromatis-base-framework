@@ -54,7 +54,7 @@ function log(
   phase: "probe" | "lock" | "migrate" | "seed" | "ready" | "failed",
   details?: Record<string, unknown>,
 ): void {
-  console.info("[db/setup]", phase, { context, ...(details ?? {}) });
+  console.warn("[db/setup]", phase, { context, ...(details ?? {}) });
 }
 
 async function probeDatabaseState(

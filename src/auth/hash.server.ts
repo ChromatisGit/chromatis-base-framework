@@ -11,9 +11,9 @@ export async function hashPin(pin: string): Promise<string> {
 export async function verifyPin(pin: string, storedHash: string): Promise<boolean> {
   const parts = storedHash.split(":");
   if (parts[0] !== "pbkdf2" || parts.length !== 4) return false;
-  const iterations = parseInt(parts[1]!, 10);
-  const salt = fromHex(parts[2]!) as Uint8Array<ArrayBuffer>;
-  const expectedKey = fromHex(parts[3]!);
+  const iterations = parseInt(parts[1] ?? "", 10);
+  const salt = fromHex(parts[2] ?? "") as Uint8Array<ArrayBuffer>;
+  const expectedKey = fromHex(parts[3] ?? "");
   const derivedKey = new Uint8Array(await deriveKey(pin, salt, iterations));
   return timingSafeEqual(derivedKey, expectedKey);
 }
@@ -32,7 +32,7 @@ async function deriveKey(pin: string, salt: Uint8Array<ArrayBuffer>, iterations:
 function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a[i]! ^ b[i]!;
+  for (let i = 0; i < a.length; i++) diff |= (a[i] ?? 0) ^ (b[i] ?? 0);
   return diff === 0;
 }
 

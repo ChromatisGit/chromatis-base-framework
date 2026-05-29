@@ -56,6 +56,7 @@ export function useDbQuery<T>(
   useEffect(() => {
     if (!db) return;
     void runLoad();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [db, runLoad, ...deps]);
 
   useEffect(() => {

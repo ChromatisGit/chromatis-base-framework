@@ -21,7 +21,7 @@ export default [
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ["infra/scripts/*.ts"],
+          allowDefaultProject: ["infra/scripts/*.ts", "infra/*.d.ts"],
         },
         tsconfigRootDir: __dirname,
       },
