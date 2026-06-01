@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Link } from "react-router";
 import { X, Moon, Sun, LogIn } from "lucide-react";
+import { motion, useMotionValue, useMotionValueEvent, useTransform, animate, type MotionValue } from "motion/react";
 import { toggleTheme, type NavItem } from "./navItems.js";
 import type { SidebarBrand } from "./Sidebar.js";
 
@@ -9,42 +10,148 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   navItems: readonly NavItem[];
+  pageDragX?: MotionValue<number>;
+  isFirstTab?: boolean;
 }
 
-export function MobileMenu({ brand, isOpen, onClose, navItems }: Props) {
+export function MobileMenu({ brand, isOpen, onClose, navItems, pageDragX, isFirstTab }: Props) {
+  // Drawer position: 0 = fully open, -drawerWidth = fully closed
+  const drawerX = useMotionValue(-300);
+  const drawerWidthRef = useRef(300);
+
+  // Stable refs for use inside imperative event handlers
+  const isOpenRef = useRef(isOpen);
+  const isFirstTabRef = useRef(isFirstTab ?? false);
+  isOpenRef.current = isOpen;
+  isFirstTabRef.current = isFirstTab ?? false;
+
+  const asideRef = useRef<HTMLElement>(null);
+  const swipeStartX = useRef(0);
+  const isSwipeConfirmedRef = useRef(false);
+
+  // Compute actual drawer width on mount (matches CSS min(80vw,300px))
+  // and set the initial closed position precisely.
+  useEffect(() => {
+    const w = Math.min(window.innerWidth * 0.8, 300);
+    drawerWidthRef.current = w;
+    if (!isOpenRef.current) drawerX.set(-w);
+  }, [drawerX]);
+
+  // Backdrop opacity derived from drawer position
+  const backdropOpacity = useTransform(drawerX, (v) => {
+    const w = drawerWidthRef.current;
+    return Math.max(0, Math.min(0.35, (v + w) / w * 0.35));
+  });
+
+  // Sync drawer position with the page drag so it peeks in as the page slides right
+  const fallbackDragX = useMotionValue(0);
+  useMotionValueEvent(pageDragX ?? fallbackDragX, "change", (v) => {
+    if (!isOpenRef.current && isFirstTabRef.current) {
+      drawerX.set(Math.min(0, v - drawerWidthRef.current));
+    }
+  });
+
+  // Animate drawer open/closed when isOpen changes (button, backdrop, keyboard)
+  const skipFirstAnimationRef = useRef(true);
+  useEffect(() => {
+    // Skip the initial render — drawerX is already set to the correct closed position
+    if (skipFirstAnimationRef.current) {
+      skipFirstAnimationRef.current = false;
+      return;
+    }
+    const w = drawerWidthRef.current;
+    if (isOpen) {
+      void animate(drawerX, 0, { type: "spring", stiffness: 400, damping: 40 });
+    } else {
+      void animate(drawerX, -w, { type: "tween", duration: 0.2, ease: "easeOut" });
+    }
+  }, [isOpen, drawerX]);
+
+  // Body scroll lock + keyboard close
   useEffect(() => {
     if (!isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-
+    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", handleKeyDown);
-
     return () => {
       document.body.style.overflow = "";
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isOpen, onClose]);
 
+  // Non-passive touchmove on the drawer so we can preventDefault during swipe-to-close
+  useEffect(() => {
+    const el = asideRef.current;
+    if (!el) return;
+
+    function onTouchMove(e: TouchEvent) {
+      if (!isOpenRef.current) return;
+      const touch = e.touches[0];
+      if (!touch) return;
+
+      const dx = touch.clientX - swipeStartX.current;
+
+      if (!isSwipeConfirmedRef.current) {
+        if (Math.abs(dx) < 8) return;
+        if (dx >= 0) return; // right swipe on open drawer — ignore
+        isSwipeConfirmedRef.current = true;
+      }
+
+      e.preventDefault();
+      // dx is negative (moving left); clamp so drawer can't go past fully closed
+      drawerX.set(Math.max(-drawerWidthRef.current, dx));
+    }
+
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => el.removeEventListener("touchmove", onTouchMove);
+  }, [drawerX]);
+
+  function handleSwipeTouchStart(e: React.TouchEvent) {
+    const touch = e.touches[0];
+    if (!touch) return;
+    swipeStartX.current = touch.clientX;
+    isSwipeConfirmedRef.current = false;
+  }
+
+  function handleSwipeTouchEnd(e: React.TouchEvent) {
+    if (!isSwipeConfirmedRef.current) return;
+    isSwipeConfirmedRef.current = false;
+
+    const touch = e.changedTouches[0];
+    if (!touch) return;
+
+    const dx = touch.clientX - swipeStartX.current;
+    const velocity = drawerX.getVelocity(); // px/s, negative = leftward
+    const w = drawerWidthRef.current;
+
+    if (dx < -(w * 0.35) || velocity < -400) {
+      // Animate fully closed, then call onClose so isOpen transitions cleanly
+      void animate(drawerX, -w, { type: "tween", duration: 0.2, ease: "easeOut" }).then(() => {
+        onClose();
+      });
+    } else {
+      void animate(drawerX, 0, { type: "spring", stiffness: 400, damping: 40 });
+    }
+  }
+
   return (
     <>
-      {/* Backdrop */}
-      <div
-        className={`fixed inset-0 bg-black/35 z-[80] transition-opacity duration-150 md:hidden ${
-          isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-        }`}
+      {/* Backdrop — opacity driven by drawer position, not by isOpen directly */}
+      <motion.div
+        className={`fixed inset-0 bg-black z-[80] md:hidden ${isOpen ? "pointer-events-auto" : "pointer-events-none"}`}
+        style={{ opacity: backdropOpacity }}
         onClick={onClose}
         aria-hidden
       />
 
-      {/* Drawer */}
-      <aside
-        className={`fixed top-0 left-0 bottom-0 w-[min(80vw,300px)] flex flex-col bg-card border-r border-border z-[90] transform transition-transform duration-200 md:hidden ${
-          isOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+      {/* Drawer — position driven by drawerX motion value */}
+      <motion.aside
+        ref={asideRef as React.RefObject<HTMLElement>}
+        className="fixed top-0 left-0 bottom-0 w-[min(80vw,300px)] flex flex-col bg-card border-r border-border z-[90] md:hidden"
+        style={{ x: drawerX }}
         aria-hidden={!isOpen}
+        onTouchStart={handleSwipeTouchStart}
+        onTouchEnd={handleSwipeTouchEnd}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-border flex-shrink-0">
@@ -107,7 +214,7 @@ export function MobileMenu({ brand, isOpen, onClose, navItems }: Props) {
             <span>Login</span>
           </button>
         </div>
-      </aside>
+      </motion.aside>
     </>
   );
 }

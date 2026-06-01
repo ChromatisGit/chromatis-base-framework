@@ -78,9 +78,6 @@ function getProfileEnvValue(
     if (key === "DB_DRIVER") {
       return parsed.DOCKER_DB_DRIVER ?? parsed.DB_DRIVER ?? "node";
     }
-    if (key === "DB_AUTO_INIT") {
-      return parsed.DOCKER_DB_AUTO_INIT ?? parsed.DB_AUTO_INIT ?? "0";
-    }
   }
 
   if (profile === "cloudflare") {
@@ -92,9 +89,6 @@ function getProfileEnvValue(
     }
     if (key === "DB_DRIVER") {
       return parsed.CLOUDFLARE_DB_DRIVER ?? parsed.DB_DRIVER ?? "worker";
-    }
-    if (key === "DB_AUTO_INIT") {
-      return parsed.CLOUDFLARE_DB_AUTO_INIT ?? parsed.DB_AUTO_INIT ?? "1";
     }
   }
 

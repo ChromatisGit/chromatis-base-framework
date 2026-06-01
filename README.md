@@ -17,6 +17,14 @@ Install as a git dependency — no registry needed:
 
 Run `bun install` — Bun clones the repo and links it at `node_modules/@chromatis/base`.
 
+To pull the latest version after the framework has been updated:
+
+```sh
+bun update @chromatis/base
+```
+
+`bun install` alone does not re-fetch git dependencies that are already present.
+
 ## Package exports
 
 | Import path | What it provides |
@@ -95,24 +103,34 @@ export default createViteConfig().then((config) =>
 
 ## Infra scripts
 
-DB management scripts are available after `bun install` at:
+All scripts read configuration from `CONFIG.yaml` in the consuming project root. Copy `CONFIG.template.yaml` to `CONFIG.yaml` and fill in your values before running any script.
 
-```
-node_modules/@chromatis/base/infra/scripts/dbDocker.ts
-node_modules/@chromatis/base/infra/scripts/dbInit.ts
-node_modules/@chromatis/base/infra/scripts/dbUpdate.ts
-node_modules/@chromatis/base/infra/scripts/dbMigrations.ts
-node_modules/@chromatis/base/infra/scripts/checkArchitectureBoundaries.ts
-```
+Scripts available after `bun install`:
+
+| Script | Description |
+|--------|-------------|
+| `infra/scripts/devServer.ts` | Start dev server with env vars injected from `CONFIG.yaml` local profile |
+| `infra/scripts/cfDev.ts` | Write `.dev.vars` from local profile and start Wrangler |
+| `infra/scripts/cfDeploy.ts` | Sync production profile to Cloudflare secrets, build, deploy |
+| `infra/scripts/db.ts` | Start Docker + apply pending migrations locally |
+| `infra/scripts/dbReset.ts` | Wipe and reinitialize local database (refused if URL is not localhost) |
+| `infra/scripts/dbDeploy.ts` | Show pending migrations, confirm, apply to production database |
+| `infra/scripts/checkArchitectureBoundaries.ts` | Enforce layer import rules |
 
 Typical `package.json` scripts in a consuming app:
 
 ```json
 {
   "scripts": {
-    "check:arch": "bun run node_modules/@chromatis/base/infra/scripts/checkArchitectureBoundaries.ts",
-    "db:init": "bun run node_modules/@chromatis/base/infra/scripts/dbDocker.ts reset && bun run node_modules/@chromatis/base/infra/scripts/dbInit.ts",
-    "db:update": "bun run node_modules/@chromatis/base/infra/scripts/dbDocker.ts start && bun run node_modules/@chromatis/base/infra/scripts/dbUpdate.ts"
+    "dev":       "bun run node_modules/@chromatis/base/infra/scripts/devServer.ts",
+    "check":     "react-router typegen && tsc --noEmit && eslint . && bun run node_modules/@chromatis/base/infra/scripts/checkArchitectureBoundaries.ts",
+    "build":     "react-router build",
+    "start":     "node build/server/index.js",
+    "db":        "bun run node_modules/@chromatis/base/infra/scripts/db.ts",
+    "db:reset":  "bun run node_modules/@chromatis/base/infra/scripts/dbReset.ts",
+    "db:deploy": "bun run node_modules/@chromatis/base/infra/scripts/dbDeploy.ts",
+    "cf:dev":    "bun run node_modules/@chromatis/base/infra/scripts/cfDev.ts",
+    "cf:deploy": "bun run node_modules/@chromatis/base/infra/scripts/cfDeploy.ts"
   }
 }
 ```

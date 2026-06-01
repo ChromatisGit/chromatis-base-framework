@@ -16,10 +16,6 @@ export function getDatabaseUrl(): string {
   return require("DATABASE_URL");
 }
 
-export function getDatabaseAutoInitEnabled(): boolean {
-  return getOptional("DB_AUTO_INIT") === "1";
-}
-
 export function getDbDriver(): DbDriver {
   const driver = getOptional("DB_DRIVER") ?? "node";
   if (driver !== "node" && driver !== "worker") {

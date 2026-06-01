@@ -5,9 +5,7 @@
   "type": "module",
   "scripts": {
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
-    "dbInit": "bun run infra/scripts/dbDocker.ts reset && bun run infra/scripts/dbInit.ts",
-    "dbUpdate": "bun run infra/scripts/dbDocker.ts start && bun run infra/scripts/dbUpdate.ts"
+    "typecheck": "tsc --noEmit"
   },
   "exports": {
     ".": "./src/index.ts",
@@ -33,6 +31,9 @@
     "react-dom": ">=19.0.0",
     "react-router": ">=7.0.0",
     "sonner": ">=1.0.0"
+  },
+  "dependencies": {
+    "yaml": "^2.7.0"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.0.0",
