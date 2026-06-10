@@ -31,5 +31,21 @@ export async function createViteConfig(options: ViteConfigOptions = {}): Promise
       dedupe: ["react", "react-dom", "react-router", "lucide-react"],
     },
     plugins: [...corePlugins, ...plugins],
+
+    // Prevent Vite from trying to pre-bundle the SQLite WASM package.
+    // It ships its own ES module that must be loaded as-is by the browser.
+    optimizeDeps: {
+      exclude: ["@sqlite.org/sqlite-wasm"],
+    },
+
+    // SharedWorker scripts need the correct MIME type headers.
+    // OPFS SAH pool does not require COOP/COEP, but the standard OPFS VFS
+    // does. Add these headers to support both fallback paths in dev.
+    server: {
+      headers: {
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Embedder-Policy": "require-corp",
+      },
+    },
   });
 }

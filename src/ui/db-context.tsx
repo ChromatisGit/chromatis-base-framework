@@ -1,17 +1,18 @@
 import { createContext, useContext } from "react";
+import type { SqliteClient } from "../sqlite/client.js";
 
-const DbContext = createContext<IDBDatabase | null>(null);
+const DbContext = createContext<SqliteClient | null>(null);
 
 export function DbProvider({
   children,
   db,
 }: {
   children: React.ReactNode;
-  db: IDBDatabase | null;
+  db: SqliteClient | null;
 }) {
   return <DbContext.Provider value={db}>{children}</DbContext.Provider>;
 }
 
-export function useDb(): IDBDatabase | null {
+export function useDb(): SqliteClient | null {
   return useContext(DbContext);
 }

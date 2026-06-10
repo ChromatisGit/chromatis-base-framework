@@ -14,6 +14,9 @@
     "./db-migrations": "./infra/scripts/dbMigrations.ts",
     "./runtime": "./src/runtime.ts",
     "./offline": "./src/offline.ts",
+    "./schema": "./src/schema/index.ts",
+    "./sqlite": "./src/sqlite/index.ts",
+    "./sync": "./src/sync/index.ts",
     "./styles": "./src/ui/style/consumer.css",
     "./auth": "./src/auth.ts",
     "./vite": "./src/vite.ts",
@@ -33,6 +36,7 @@
     "sonner": ">=1.0.0"
   },
   "dependencies": {
+    "@sqlite.org/sqlite-wasm": "3.53.0-build1",
     "yaml": "^2.7.0"
   },
   "devDependencies": {

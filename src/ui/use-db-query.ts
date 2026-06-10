@@ -6,19 +6,31 @@ import {
   useState,
 } from "react";
 import { useDb } from "./db-context.js";
+import type { SqliteClient } from "../sqlite/client.js";
 
-export const SYNC_COMPLETE_EVENT = "platform:synced";
+export { SYNC_COMPLETE_EVENT } from "../sync/.client/pull.js";
 
 interface DbQueryState<T> {
-  db: IDBDatabase | null;
+  db: SqliteClient | null;
   data: T | null;
   loading: boolean;
   error: Error | null;
   refresh: () => Promise<void>;
 }
 
+// React hook for reading data from the local SQLite database.
+//
+// Automatically re-runs when:
+//   - The database becomes available (on mount)
+//   - Any value in `deps` changes
+//   - A SYNC_COMPLETE_EVENT fires (server pulled new data)
+//
+// Usage:
+//   const { data: items } = useDbQuery(
+//     (db) => db.query<LocalItem>(sql`SELECT * FROM items WHERE deleted_at IS NULL`),
+//   );
 export function useDbQuery<T>(
-  load: (db: IDBDatabase) => Promise<T>,
+  load: (db: SqliteClient) => Promise<T>,
   deps: ReadonlyArray<unknown> = [],
 ): DbQueryState<T> {
   const db = useDb();
@@ -46,25 +58,21 @@ export function useDbQuery<T>(
     } catch (nextError) {
       if (gen !== genRef.current) return;
       setError(
-        nextError instanceof Error ? nextError : new Error("Failed to load data"),
+        nextError instanceof Error
+          ? nextError
+          : new Error("Failed to load data"),
       );
     } finally {
       if (gen === genRef.current) setLoading(false);
     }
   }, [db]);
 
-  useEffect(() => {
-    if (!db) return;
-    void runLoad();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [db, runLoad, ...deps]);
+  useEffect(() => { if (db) void runLoad(); }, [db, runLoad, ...deps]);
 
   useEffect(() => {
-    function handleSync() {
-      void runLoad();
-    }
-    window.addEventListener(SYNC_COMPLETE_EVENT, handleSync);
-    return () => window.removeEventListener(SYNC_COMPLETE_EVENT, handleSync);
+    window.addEventListener("platform:synced", runLoad);
+    return () => window.removeEventListener("platform:synced", runLoad);
   }, [runLoad]);
 
   return { db, data, loading, error, refresh: runLoad };
