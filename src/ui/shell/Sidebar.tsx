@@ -19,6 +19,7 @@ interface Props {
   onCollapsedChange: (collapsed: boolean) => void;
   collapsible?: boolean;
   userSlot?: ReactNode;
+  navSlot?: ReactNode;
 }
 
 export function Sidebar({
@@ -30,6 +31,7 @@ export function Sidebar({
   onCollapsedChange,
   collapsible = false,
   userSlot,
+  navSlot,
 }: Props) {
   const location = useLocation();
 
@@ -98,6 +100,7 @@ export function Sidebar({
       {/* Nav */}
       <nav
         className={cn("flex-1 overflow-y-auto flex flex-col gap-0.5", collapsed ? "p-1.5" : "p-2")}
+        style={{ scrollbarWidth: "thin", scrollbarColor: "var(--border) transparent" }}
         aria-label="Main navigation"
       >
         {mainNavItems.map(renderNavItem)}
@@ -106,6 +109,15 @@ export function Sidebar({
           <>
             <div className="my-1.5 border-t border-border" />
             {secondaryNavItems.map(renderNavItem)}
+          </>
+        )}
+
+        {navSlot !== undefined && !collapsed && (
+          <>
+            {(mainNavItems.length > 0 || secondaryNavItems.length > 0) && (
+              <div className="my-1.5 border-t border-border" />
+            )}
+            {navSlot}
           </>
         )}
       </nav>

@@ -27,7 +27,7 @@ function toReadableConnectionError(error: unknown): Error {
   }
   return new Error(
     `Database connection failed: could not reach Postgres at ${getDatabaseTarget()}. `
-      + `Start the local database with "bun run db:init".`,
+      + `Start the local database with "bun run db".`,
     { cause: error },
   );
 }

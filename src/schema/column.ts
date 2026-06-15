@@ -48,8 +48,8 @@ function makeBuilder<
 ): ColBuilder<TNullable, TTarget, TTsType> {
   return {
     ...def,
-    nullable: () => makeBuilder({ ...def, isNullable: true as true }),
-    notNull: () => makeBuilder({ ...def, isNullable: false as false }),
+    nullable: () => makeBuilder({ ...def, isNullable: true as const }),
+    notNull: () => makeBuilder({ ...def, isNullable: false as const }),
     default: (expr) => makeBuilder({ ...def, defaultValue: expr }),
     primaryKey: () => makeBuilder({ ...def, isPrimaryKey: true }),
     serverOnly: () =>

@@ -22,6 +22,7 @@ export default [
       parserOptions: {
         projectService: {
           allowDefaultProject: ["infra/scripts/*.ts", "infra/*.d.ts"],
+          maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 16,
         },
         tsconfigRootDir: __dirname,
       },

@@ -5,7 +5,6 @@
 // SharedWorkers — that's why we use Worker instead of SharedWorker.
 //
 // All SQLite APIs used here are synchronous — valid in a Worker context.
-// eslint-disable-next-line @typescript-eslint/triple-slash-reference
 /// <reference lib="webworker" />
 
 import type { WorkerRequest, WorkerReply, SqliteMigration } from "./types.js";

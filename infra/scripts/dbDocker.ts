@@ -36,7 +36,7 @@ function getComposeEnv(url: URL): NodeJS.ProcessEnv {
 }
 
 function runDockerCompose(args: string[], env: NodeJS.ProcessEnv): void {
-  const composeFile = path.resolve(process.cwd(), "infra/docker/docker-compose.yml");
+  const composeFile = path.resolve(import.meta.dirname, "../docker/docker-compose.yml");
   const result = spawnSync("docker", ["compose", "-f", composeFile, ...args], {
     cwd: process.cwd(),
     env,

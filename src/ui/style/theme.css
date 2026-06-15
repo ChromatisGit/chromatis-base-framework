@@ -19,9 +19,15 @@
   --foreground: #2d2926;
   --card: #ffffff;
   --card-foreground: #2d2926;
+  --surface-raised: #f5f5f4;
+  --surface-deep: #e7e5e4;
   --popover: #ffffff;
   --popover-foreground: #2d2926;
   --primary: #6366f1;
+  --primary-strong: #4f46e5;
+  --primary-light: #eef2ff;
+  --primary-border: #c7d2fe;
+  --primary-selection: #c7d2fe;
   --primary-foreground: #ffffff;
   --secondary: #f4f4f5;
   --secondary-foreground: #2d2926;
@@ -30,6 +36,9 @@
   --accent: #f4f4f5;
   --accent-foreground: #2d2926;
   --destructive: #ef4444;
+  --destructive-strong: #dc2626;
+  --destructive-light: #fee2e2;
+  --destructive-border: #fca5a5;
   --destructive-foreground: #ffffff;
   --border: rgba(120, 113, 108, 0.15);
   --input: transparent;
@@ -38,7 +47,9 @@
   --font-weight-medium: 500;
   --font-weight-normal: 400;
   --ring: #818cf8;
+  --primary-focus-ring: #818cf8;
   --radius: 1rem;
+  --radius-xxs: 0.375rem;
   --sidebar: #ffffff;
   --sidebar-foreground: #2d2926;
   --sidebar-primary: #6366f1;
@@ -48,7 +59,38 @@
   --sidebar-border: rgba(120, 113, 108, 0.15);
   --sidebar-ring: #818cf8;
   --success: #10b981;
+  --success-strong: #059669;
   --success-light: #d1fae5;
+  --success-border: #6ee7b7;
+  --warning: #f59e0b;
+  --warning-strong: #d97706;
+  --warning-light: #fef3c7;
+  --warning-border: #fbbf24;
+  --info: #3b82f6;
+  --info-strong: #2563eb;
+  --info-light: #dbeafe;
+  --info-border: #93c5fd;
+  --support: #14b8a6;
+  --support-strong: #0f766e;
+  --support-light: #ccfbf1;
+  --support-border: #5eead4;
+  --hint: #eab308;
+  --hint-strong: #ca8a04;
+  --hint-light: #fef9c3;
+  --neutral: #78716c;
+  --neutral-hover: #57534e;
+  --neutral-border: #d6d3d1;
+  --text-on-accent: #ffffff;
+  --code-background: #0f172a;
+  --code-border: #232c41;
+  --code-foreground: #e6edf5;
+
+  /* Typography */
+  --font-body: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --text-display: clamp(2rem, 4vw, 2.75rem);
 
   /* Spacing scale — use these in CSS that can't use Tailwind utility classes */
   --space-1: 0.25rem;
@@ -59,6 +101,14 @@
   --space-8: 2rem;
   --space-12: 3rem;
   --space-16: 4rem;
+
+  /* Layout */
+  --page-padding: 1.5rem;
+  --navbar-height: 0px;
+  --sidebar-width: 240px;
+  --bottom-nav-height: 60px;
+  --content-width-narrow: 960px;
+  --content-width-wide: 1120px;
 
   /* Elevation */
   --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.06);
@@ -71,9 +121,15 @@
   --foreground: #fafaf9;
   --card: #292524;
   --card-foreground: #fafaf9;
+  --surface-raised: #292524;
+  --surface-deep: #44403c;
   --popover: #292524;
   --popover-foreground: #fafaf9;
   --primary: #818cf8;
+  --primary-strong: #a5b4fc;
+  --primary-light: #312e81;
+  --primary-border: #818cf8;
+  --primary-selection: #312e81;
   --primary-foreground: #1c1917;
   --secondary: #27272a;
   --secondary-foreground: #fafaf9;
@@ -82,11 +138,15 @@
   --accent: #27272a;
   --accent-foreground: #fafaf9;
   --destructive: #f87171;
+  --destructive-strong: #fca5a5;
+  --destructive-light: #450a0a;
+  --destructive-border: #f87171;
   --destructive-foreground: #1c1917;
   --border: rgba(168, 162, 158, 0.2);
   --input: rgba(168, 162, 158, 0.2);
   --input-background: #292524;
   --ring: #818cf8;
+  --primary-focus-ring: #818cf8;
   --sidebar: #292524;
   --sidebar-foreground: #fafaf9;
   --sidebar-primary: #818cf8;
@@ -96,7 +156,28 @@
   --sidebar-border: rgba(168, 162, 158, 0.2);
   --sidebar-ring: #818cf8;
   --success: #34d399;
+  --success-strong: #6ee7b7;
   --success-light: #065f46;
+  --success-border: #34d399;
+  --warning: #fbbf24;
+  --warning-strong: #fcd34d;
+  --warning-light: #451a03;
+  --warning-border: #fbbf24;
+  --info: #60a5fa;
+  --info-strong: #93c5fd;
+  --info-light: #172554;
+  --info-border: #60a5fa;
+  --support: #2dd4bf;
+  --support-strong: #5eead4;
+  --support-light: #134e4a;
+  --support-border: #2dd4bf;
+  --hint: #eab308;
+  --hint-strong: #facc15;
+  --hint-light: #422006;
+  --neutral: #a8a29e;
+  --neutral-hover: #d6d3d1;
+  --neutral-border: #57534e;
+  --text-on-accent: #ffffff;
 
   --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.2);
   --shadow-md: 0 4px 12px 0 rgb(0 0 0 / 0.25);
@@ -108,9 +189,14 @@
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-deep: var(--surface-deep);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --color-primary-light: var(--primary-light);
+  --color-primary-border: var(--primary-border);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -119,11 +205,33 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-strong: var(--destructive-strong);
+  --color-destructive-light: var(--destructive-light);
+  --color-destructive-border: var(--destructive-border);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-input-background: var(--input-background);
   --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-strong: var(--success-strong);
+  --color-success-light: var(--success-light);
+  --color-success-border: var(--success-border);
+  --color-warning: var(--warning);
+  --color-warning-strong: var(--warning-strong);
+  --color-warning-light: var(--warning-light);
+  --color-warning-border: var(--warning-border);
+  --color-info: var(--info);
+  --color-info-strong: var(--info-strong);
+  --color-info-light: var(--info-light);
+  --color-info-border: var(--info-border);
+  --color-support: var(--support);
+  --color-support-strong: var(--support-strong);
+  --color-support-light: var(--support-light);
+  --color-support-border: var(--support-border);
+  --color-hint: var(--hint);
+  --color-hint-strong: var(--hint-strong);
+  --color-hint-light: var(--hint-light);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -145,7 +253,7 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    font-family: var(--font-body);
   }
 
   html {

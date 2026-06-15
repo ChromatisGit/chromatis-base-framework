@@ -2,8 +2,8 @@
  * Embedded SQL assets for the auto-init mechanism (DB_AUTO_INIT=1).
  *
  * The framework exports empty arrays — there is no app-level schema here.
- * Each consuming project provides its own SQL migrations via its db:init
- * and db:migrate scripts. Auto-init only creates the app_schema_migrations
+ * Each consuming project provides its own SQL migrations via its db scripts.
+ * Auto-init only creates the app_schema_migrations
  * tracking table; all other schema is managed by project-level scripts.
  *
  * To add project-specific embedded migrations, create src/db/runtime-sql.ts

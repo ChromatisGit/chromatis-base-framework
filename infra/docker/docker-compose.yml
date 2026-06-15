@@ -1,10 +1,4 @@
-# Template — copy to project root and fill in the values below.
-# Variables sourced from a .env file in the project root:
-#   DB_NAME              e.g. myapp
-#   DB_USER              e.g. myapp
-#   DB_PASSWORD          e.g. secret
-#   DB_PORT              e.g. 6543
-#   DOCKER_DATABASE_URL  e.g. postgres://myapp:secret@db:5432/myapp
+# DB credentials are derived from CONFIG.yaml (local.database) by infra/scripts/dbDocker.ts.
 #
 services:
   db:
