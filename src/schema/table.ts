@@ -70,3 +70,29 @@ export function defineClientTable<T extends Record<string, ColDef<boolean, Targe
     sqliteDDL: () => generateSQLiteDDL(name, columns),
   };
 }
+
+// SQLite has no native JSON type — col.json() columns (pgType "JSONB") are
+// stored as TEXT and come back from SqliteClient.query() as raw strings, not
+// objects. The sync engine's serializeForSqlite() already does the inverse
+// (object -> JSON string) generically on write; these are the read-side
+// counterpart, so every col.json() column round-trips correctly without each
+// call site having to remember which fields need JSON.parse.
+export function parseSqliteRow<
+  T extends Record<string, ColDef<boolean, Target, TsType>>,
+  R extends Record<string, unknown>,
+>(table: { columns: T }, row: R): R {
+  const result: Record<string, unknown> = { ...row };
+  for (const [key, def] of Object.entries(table.columns)) {
+    if (def.pgType !== "JSONB") continue;
+    const value = result[key];
+    if (typeof value === "string") result[key] = JSON.parse(value);
+  }
+  return result as R;
+}
+
+export function parseSqliteRows<
+  T extends Record<string, ColDef<boolean, Target, TsType>>,
+  R extends Record<string, unknown>,
+>(table: { columns: T }, rows: R[]): R[] {
+  return rows.map((row) => parseSqliteRow(table, row));
+}

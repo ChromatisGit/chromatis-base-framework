@@ -32,6 +32,13 @@ export async function createViteConfig(options: ViteConfigOptions = {}): Promise
     },
     plugins: [...corePlugins, ...plugins],
 
+    // The SQLite Worker dynamically imports @sqlite.org/sqlite-wasm, which forces
+    // code-splitting for the worker bundle. Rollup's default worker.format ("iife")
+    // doesn't support code-splitting, so it must be "es".
+    worker: {
+      format: "es",
+    },
+
     // Prevent Vite from trying to pre-bundle the SQLite WASM package.
     // It ships its own ES module that must be loaded as-is by the browser.
     optimizeDeps: {

@@ -72,11 +72,13 @@ export function createSqliteClient(options: SqliteClientOptions): Promise<Sqlite
 async function _createClient(
   options: SqliteClientOptions,
 ): Promise<SqliteClient> {
-  // Vite resolves `new URL(...)` statically to produce a correct worker URL
-  // that points to the bundled worker chunk, even when this code runs from
-  // inside node_modules/@chromatis/base.
-  const workerUrl = new URL("./worker.ts", import.meta.url);
-  const worker = new Worker(workerUrl, { type: "module", name: "sqlite" });
+  // Vite only recognizes the worker-bundling pattern when `new URL(...)` is
+  // written inline as the argument to `new Worker(...)` — assigning it to a
+  // variable first defeats Vite's static detection, and it silently falls
+  // back to copying this file as a raw, untranspiled .ts asset (which Cloudflare
+  // then serves with Content-Type: video/mp2t, since that's the standard MIME
+  // mapping for the .ts extension — module scripts fail strict MIME checks).
+  const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module", name: "sqlite" });
 
   // Initialize the database (migrations run on first connect only).
   const initReply = await send(worker, {

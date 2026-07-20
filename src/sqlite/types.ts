@@ -37,7 +37,3 @@ export type WorkerReply =
   | { id: string; rows: Record<string, unknown>[] }
   | { id: string; changes: number }
   | { id: string; error: string };
-
-export function isErrorReply(r: WorkerReply): r is { id: string; error: string } {
-  return "error" in r;
-}

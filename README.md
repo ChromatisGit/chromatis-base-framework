@@ -25,6 +25,24 @@ bun update @chromatis/base
 
 `bun install` alone does not re-fetch git dependencies that are already present.
 
+### Local development against a consuming app
+
+When changing the framework and testing against dropsort or studyluma-website locally, link instead of round-tripping through git:
+
+```sh
+# once, inside chromatis-base-framework/
+bun link
+
+# in each consuming app
+bun link @chromatis/base
+```
+
+This replaces `node_modules/@chromatis/base` in that app with a symlink to the local `chromatis-base-framework` checkout, so edits show up immediately without committing/pushing/reinstalling.
+
+Caveats:
+
+- The link is local-machine state — a fresh `bun install` in the app (or a clone elsewhere) drops back to the git dependency, so it needs redoing per machine/clone.
+- Running `bun link @chromatis/base` can also trigger Bun to bump the app's locked git commit for `@chromatis/base` in `bun.lock` if it was behind, independent of the link itself — check `bun.lock` diffs before committing while you're in this workflow.
 ## Package exports
 
 | Import path | What it provides |
@@ -113,6 +131,8 @@ Scripts available after `bun install`:
 | `infra/scripts/cfDev.ts` | Write `.dev.vars` from local profile and start Wrangler |
 | `infra/scripts/cfDeploy.ts` | Sync production profile to Cloudflare secrets, build, deploy |
 | `infra/scripts/db.ts` | Start Docker + apply pending migrations locally |
+| `infra/scripts/dbGenerate.ts` | Generate a migration snapshot from `sql/views/*.sql` and `sql/functions/*.sql` |
+| `infra/scripts/dbCheckGeneratedMigrations.ts` | Verify split SQL routine files match the last generated migration manifest |
 | `infra/scripts/dbReset.ts` | Wipe and reinitialize local database (refused if URL is not localhost) |
 | `infra/scripts/dbDeploy.ts` | Show pending migrations, confirm, apply to production database |
 | `infra/scripts/checkArchitectureBoundaries.ts` | Enforce layer import rules |
@@ -123,10 +143,11 @@ Typical `package.json` scripts in a consuming app:
 {
   "scripts": {
     "dev":       "bun run node_modules/@chromatis/base/infra/scripts/devServer.ts",
-    "check":     "react-router typegen && tsc --noEmit && eslint . && bun run node_modules/@chromatis/base/infra/scripts/checkArchitectureBoundaries.ts",
+    "check":     "react-router typegen && tsc --noEmit && eslint . && bun run node_modules/@chromatis/base/infra/scripts/checkArchitectureBoundaries.ts && bun run node_modules/@chromatis/base/infra/scripts/dbCheckGeneratedMigrations.ts",
     "build":     "react-router build",
     "start":     "node build/server/index.js",
     "db":        "bun run node_modules/@chromatis/base/infra/scripts/db.ts",
+    "db:generate": "bun run node_modules/@chromatis/base/infra/scripts/dbGenerate.ts",
     "db:reset":  "bun run node_modules/@chromatis/base/infra/scripts/dbReset.ts",
     "db:deploy": "bun run node_modules/@chromatis/base/infra/scripts/dbDeploy.ts",
     "cf:dev":    "bun run node_modules/@chromatis/base/infra/scripts/cfDev.ts",
@@ -134,6 +155,30 @@ Typical `package.json` scripts in a consuming app:
   }
 }
 ```
+
+### Generated SQL routine migrations
+
+Projects may keep routines split by object:
+
+```text
+sql/views/*.sql
+sql/functions/*.sql
+```
+
+Those files are editable desired state. Production still only applies committed files from
+`sql/migrations/*.sql`. When a routine file changes, generate a migration snapshot:
+
+```sh
+bun run db:generate describe_the_change
+```
+
+The generator writes the next `sql/migrations/<version>__describe_the_change.sql`
+and updates `sql/routines.manifest.json`. The normal `db`, `db:reset`, `db:deploy`,
+and `dbCheckGeneratedMigrations.ts` paths reject drift, so changed routines cannot be
+silently applied locally or forgotten before deployment.
+
+For complex data moves, keep writing a manual migration. Generated routine migrations
+only cover split SQL views/functions.
 
 ## Docker
 
