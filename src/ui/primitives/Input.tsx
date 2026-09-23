@@ -1,15 +1,22 @@
-import { type InputHTMLAttributes, useId } from "react"
-import { cn } from "./cn"
+import { type InputHTMLAttributes, useId } from "react";
+import { cn } from "./cn";
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
-  label: string
-  hint?: string
-  error?: string
+  label: string;
+  hint?: string;
+  error?: string;
 }
 
-export function Input({ label, hint, error, id, className, ...props }: InputProps) {
-  const generatedId = useId()
-  const inputId = id ?? generatedId
+export function Input({
+  label,
+  hint,
+  error,
+  id,
+  className,
+  ...props
+}: InputProps) {
+  const generatedId = useId();
+  const inputId = id ?? generatedId;
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -26,10 +33,12 @@ export function Input({ label, hint, error, id, className, ...props }: InputProp
             ? "border-destructive focus:ring-destructive/30"
             : "border-border",
           props.disabled && "opacity-50 cursor-not-allowed",
-          className
+          className,
         )}
         aria-invalid={error ? "true" : undefined}
-        aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
+        aria-describedby={
+          error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined
+        }
         {...props}
       />
       {hint && !error && (
@@ -43,5 +52,5 @@ export function Input({ label, hint, error, id, className, ...props }: InputProp
         </p>
       )}
     </div>
-  )
+  );
 }

@@ -6,7 +6,11 @@ import { CenteredLayout } from "../layouts/CenteredLayout.js";
 import { Form } from "../forms/Form.js";
 
 interface RegisterFormProps {
-  status?: "pending_approval" | "username_taken" | "pin_mismatch" | (string & {});
+  status?:
+    | "pending_approval"
+    | "username_taken"
+    | "pin_mismatch"
+    | (string & {});
   title?: string;
   submitLabel?: string;
 }
@@ -23,10 +27,12 @@ export function RegisterForm({
     return (
       <CenteredLayout maxWidth={400}>
         <Card className="p-6 flex flex-col gap-4">
-          <h1 className="text-xl font-semibold text-foreground">Account created</h1>
+          <h1 className="text-xl font-semibold text-foreground">
+            Account created
+          </h1>
           <p className="text-sm text-muted-foreground">
-            Your account was successfully created. An administrator needs to enable it before you
-            can sign in.
+            Your account was successfully created. An administrator needs to
+            enable it before you can sign in.
           </p>
           <a
             href="/login"
@@ -50,7 +56,9 @@ export function RegisterForm({
             autoComplete="username"
             required
             disabled={isPending}
-            {...(status === "username_taken" ? { error: "This username is already taken." } : {})}
+            {...(status === "username_taken"
+              ? { error: "This username is already taken." }
+              : {})}
           />
           <Input
             label="PIN"
@@ -69,13 +77,23 @@ export function RegisterForm({
             autoComplete="new-password"
             required
             disabled={isPending}
-            {...(status === "pin_mismatch" ? { error: "PINs do not match." } : {})}
+            {...(status === "pin_mismatch"
+              ? { error: "PINs do not match." }
+              : {})}
           />
-          <Button type="submit" size="lg" className="w-full mt-1" disabled={isPending}>
+          <Button
+            type="submit"
+            size="lg"
+            className="w-full mt-1"
+            disabled={isPending}
+          >
             {isPending ? "Creating account…" : submitLabel}
           </Button>
         </Form>
-        <a href="/login" className="text-sm text-muted-foreground hover:text-foreground text-center">
+        <a
+          href="/login"
+          className="text-sm text-muted-foreground hover:text-foreground text-center"
+        >
           Already have an account? Sign in
         </a>
       </Card>

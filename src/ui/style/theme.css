@@ -86,7 +86,7 @@
   --code-foreground: #e6edf5;
 
   /* Typography */
-  --font-body: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-body: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
@@ -289,7 +289,9 @@
     font-family: inherit;
   }
 
-  input, textarea, select {
+  input,
+  textarea,
+  select {
     font-family: inherit;
     font-size: inherit;
   }

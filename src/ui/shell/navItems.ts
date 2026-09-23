@@ -3,7 +3,12 @@ import type { ComponentType, SVGAttributes } from "react";
 export interface NavItem {
   path: string;
   label: string;
-  icon: ComponentType<SVGAttributes<SVGElement> & { size?: number | string; strokeWidth?: number | string }>;
+  icon: ComponentType<
+    SVGAttributes<SVGElement> & {
+      size?: number | string;
+      strokeWidth?: number | string;
+    }
+  >;
   badge?: number;
 }
 

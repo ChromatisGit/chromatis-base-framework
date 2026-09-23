@@ -1,201 +1,169 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
-
 import postgres from "postgres";
+import { authMigrations } from "../../src/auth/migrations.ts";
+import {
+  createDatabase,
+  runDatabaseStartup,
+  type Database,
+  type DatabaseEnvironment,
+  type DatabaseRuntime,
+} from "../../src/db/client.ts";
+import { closeNodeDatabasePools } from "../../src/db/client.node.ts";
+import {
+  assertSafeRuntimeRole,
+  runMigrationEngine,
+  type SetupQueryExecutor,
+} from "../../src/db/setup.ts";
+import { checkGeneratedMigrationStates } from "./dbGeneratedMigrations.ts";
 
-import { checkGeneratedMigrationState } from "./dbGeneratedMigrations";
-
-const MIGRATION_LOCK_NAMESPACE = 23117;
-const MIGRATION_LOCK_KEY = 40873;
+const MIGRATION_PATTERN = /^(\d+\.\d+\.\d+)__([a-z0-9][a-z0-9_-]*)\.sql$/i;
 
 export interface MigrationFile {
-  version: string;
-  description: string;
-  filename: string;
-  sql: string;
+  readonly module: string;
+  readonly version: string;
+  readonly description: string;
+  readonly filename: string;
+  readonly sql: string;
 }
 
-type MigrationSql = {
-  <TRows extends readonly (object | undefined)[] = postgres.Row[]>(
-    template: TemplateStringsArray,
-    ...parameters: readonly unknown[]
-  ): PromiseLike<TRows>;
-  unsafe<TRows extends readonly unknown[] = postgres.Row[]>(
-    query: string,
-    parameters?: readonly unknown[],
-    queryOptions?: postgres.UnsafeQueryOptions,
-  ): PromiseLike<TRows>;
-};
-
-const MIGRATION_FILE_RE = /^(\d+\.\d+\.\d+)__([a-z0-9][a-z0-9_-]*)\.sql$/i;
-
-export function loadMigrationFiles(
-  migrationsDir = path.resolve(process.cwd(), "sql/migrations"),
+function loadModuleMigrations(
+  moduleName: string,
+  directory: string,
 ): MigrationFile[] {
-  if (!existsSync(migrationsDir)) return [];
-
-  return readdirSync(migrationsDir, { withFileTypes: true })
-    .filter((e) => e.isFile() && MIGRATION_FILE_RE.test(e.name))
-    .map((e) => e.name)
-    .sort((a, b) => a.localeCompare(b))
-    .map((name) => {
-      const match = MIGRATION_FILE_RE.exec(name)!;
+  if (!existsSync(directory)) {
+    return [];
+  }
+  return readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .sort((left, right) =>
+      left.localeCompare(right, undefined, { numeric: true }),
+    )
+    .map((filename) => {
+      const match = MIGRATION_PATTERN.exec(filename);
+      if (!match) {
+        throw new Error(`[db] Invalid migration filename: ${filename}`);
+      }
       return {
+        module: moduleName,
         version: match[1]!,
-        description: match[2]!.replace(/-/g, " "),
-        filename: name,
-        sql: readFileSync(path.join(migrationsDir, name), "utf8"),
+        description: match[2]!.replaceAll("-", " ").replaceAll("_", " "),
+        filename,
+        sql: readFileSync(path.join(directory, filename), "utf8"),
       };
     });
 }
 
-function loadSeedFiles(seedsDir: string): { name: string; sql: string }[] {
-  if (!existsSync(seedsDir)) return [];
-
-  return readdirSync(seedsDir, { withFileTypes: true })
-    .filter((e) => e.isFile() && e.name.endsWith(".sql"))
-    .map((e) => e.name)
-    .sort((a, b) => a.localeCompare(b))
-    .map((name) => ({
-      name,
-      sql: readFileSync(path.join(seedsDir, name), "utf8"),
-    }));
+export function loadMigrationFiles(
+  modulesDirectory = path.resolve(process.cwd(), "src/modules"),
+): MigrationFile[] {
+  const framework = authMigrations.map((migration) => ({
+    ...migration,
+    filename: `${migration.version}__${migration.description.replaceAll(" ", "_")}.sql`,
+  }));
+  if (!existsSync(modulesDirectory)) {
+    return framework;
+  }
+  const application = readdirSync(modulesDirectory, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .flatMap((entry) =>
+      loadModuleMigrations(
+        entry.name,
+        path.join(modulesDirectory, entry.name, "migrations"),
+      ),
+    );
+  const migrations = [...framework, ...application];
+  const keys = new Set<string>();
+  for (const migration of migrations) {
+    const key = `${migration.module}:${migration.version}`;
+    if (keys.has(key)) {
+      throw new Error(`Duplicate migration: ${key}`);
+    }
+    keys.add(key);
+  }
+  return migrations;
 }
 
-function asMigrationSql(sql: unknown): MigrationSql {
-  return sql as MigrationSql;
+function makeQueryExecutor(sql: postgres.Sql): SetupQueryExecutor {
+  return async (statement, values = []) => {
+    const rows = await sql.unsafe(
+      statement,
+      values as postgres.ParameterOrJSON<never>[],
+    );
+    return rows as Array<Record<string, unknown>>;
+  };
 }
 
-async function ensureMigrationTable(tx: MigrationSql): Promise<void> {
-  await tx`
-    CREATE TABLE IF NOT EXISTS app_schema_migrations (
-      version     text        PRIMARY KEY,
-      description text        NOT NULL,
-      applied_at  timestamptz NOT NULL DEFAULT now()
-    )
-  `;
+export interface DatabaseStartupOptions {
+  readonly databaseUrl: string;
+  readonly migrationDatabaseUrl?: string;
+  readonly runtime: DatabaseRuntime;
+  readonly environment: DatabaseEnvironment;
+  readonly applicationRoot?: string;
 }
 
-async function getAppliedVersions(tx: MigrationSql): Promise<Set<string>> {
-  const rows = await tx<{ version: string }[]>`
-    SELECT version FROM app_schema_migrations ORDER BY applied_at ASC, version ASC
-  `;
-  return new Set(rows.map((r) => r.version));
+function discoverApplicationMigrations(
+  applicationRoot: string,
+): MigrationFile[] {
+  checkGeneratedMigrationStates(applicationRoot);
+  return loadMigrationFiles(path.join(applicationRoot, "src/modules"));
 }
 
-// Returns pending migrations without opening a persistent connection.
-// Caller is responsible for closing the sql instance.
+export async function startDatabase(
+  options: DatabaseStartupOptions,
+): Promise<Database> {
+  const applicationRoot = options.applicationRoot ?? process.cwd();
+  const migrations = discoverApplicationMigrations(applicationRoot);
+  const database = createDatabase(options.databaseUrl, {
+    runtime: options.runtime,
+    environment: options.environment,
+    ...(options.migrationDatabaseUrl
+      ? { migrationConnectionString: options.migrationDatabaseUrl }
+      : {}),
+  });
+  await runDatabaseStartup(database, migrations);
+  return database;
+}
+
 export async function getPendingMigrations(
   databaseUrl: string,
-  migrationsDir?: string,
-): Promise<{ pending: MigrationFile[]; sql: postgres.Sql }> {
-  checkGeneratedMigrationState();
-
+  applicationRoot = process.cwd(),
+): Promise<readonly MigrationFile[]> {
+  const migrations = discoverApplicationMigrations(applicationRoot);
   const sql = postgres(databaseUrl, { max: 1 });
-  const all = loadMigrationFiles(migrationsDir);
-
-  const applied = await sql.begin(async (rawTx) => {
-    const tx = asMigrationSql(rawTx);
-    await tx`SELECT pg_advisory_xact_lock(${MIGRATION_LOCK_NAMESPACE}, ${MIGRATION_LOCK_KEY})`;
-    await ensureMigrationTable(tx);
-    return getAppliedVersions(tx);
-  });
-
-  const pending = all.filter((m) => !applied.has(m.version));
-  return { pending, sql };
-}
-
-export async function applyMigrations(
-  sql: postgres.Sql,
-  migrations: MigrationFile[],
-): Promise<void> {
-  await sql.begin(async (rawTx) => {
-    const tx = asMigrationSql(rawTx);
-    await tx`SELECT pg_advisory_xact_lock(${MIGRATION_LOCK_NAMESPACE}, ${MIGRATION_LOCK_KEY})`;
-    await tx`SET LOCAL client_min_messages = warning`;
-    await ensureMigrationTable(tx);
-    const applied = await getAppliedVersions(tx);
-
-    for (const migration of migrations) {
-      if (applied.has(migration.version)) continue;
-      console.info(`[db] Applying ${migration.version}: ${migration.description}`);
-      const trimmed = migration.sql.trim();
-      if (trimmed) await tx.unsafe(trimmed);
-      await tx`
-        INSERT INTO app_schema_migrations (version, description)
-        VALUES (${migration.version}, ${migration.description})
-        ON CONFLICT (version) DO NOTHING
-      `;
-    }
-  });
+  const query = makeQueryExecutor(sql);
+  try {
+    await assertSafeRuntimeRole(query);
+    const result = await runMigrationEngine({
+      mode: "check",
+      connectionKey: databaseUrl,
+      context: "cli-status",
+      migrations,
+      query,
+      transaction: async (operation) => operation(query),
+    });
+    return result.pending;
+  } finally {
+    await sql.end();
+  }
 }
 
 export async function runDbMigrations(
   databaseUrl: string,
-  options?: {
-    seeds?: boolean;
-    migrationsDir?: string;
-    seedsDir?: string;
-    checkGeneratedMigrations?: boolean;
-  },
+  migrationDatabaseUrl: string,
+  options?: Readonly<{ applicationRoot?: string }>,
 ): Promise<void> {
-  if (options?.checkGeneratedMigrations ?? true) {
-    checkGeneratedMigrationState();
-  }
-
-  const migrationsDir = options?.migrationsDir ?? path.resolve(process.cwd(), "sql/migrations");
-  const seedsDir = options?.seedsDir ?? path.resolve(process.cwd(), "sql/seeds");
-  const migrations = loadMigrationFiles(migrationsDir);
-  const seeds = options?.seeds ? loadSeedFiles(seedsDir) : [];
-
-  const sql = postgres(databaseUrl, { max: 1 });
-
   try {
-    await sql.begin(async (rawTx) => {
-      const tx = asMigrationSql(rawTx);
-      await tx`SELECT pg_advisory_xact_lock(${MIGRATION_LOCK_NAMESPACE}, ${MIGRATION_LOCK_KEY})`;
-      await tx`SET LOCAL client_min_messages = warning`;
-      await ensureMigrationTable(tx);
-
-      const applied = await getAppliedVersions(tx);
-      const wasEmpty = applied.size === 0;
-
-      if (migrations.length === 0) {
-        console.info("[db] No migration files found.");
-        return;
-      }
-
-      let count = 0;
-      for (const migration of migrations) {
-        if (applied.has(migration.version)) continue;
-        console.info(`[db] Applying ${migration.version}: ${migration.description}`);
-        const trimmed = migration.sql.trim();
-        if (trimmed) await tx.unsafe(trimmed);
-        await tx`
-          INSERT INTO app_schema_migrations (version, description)
-          VALUES (${migration.version}, ${migration.description})
-          ON CONFLICT (version) DO NOTHING
-        `;
-        applied.add(migration.version);
-        count += 1;
-      }
-
-      if (count === 0) {
-        console.info("[db] Schema is up to date.");
-      } else {
-        console.info(`[db] Applied ${count} migration${count === 1 ? "" : "s"}.`);
-      }
-
-      if (wasEmpty && seeds.length > 0) {
-        for (const seed of seeds) {
-          console.info(`[db] Applying seed ${seed.name}`);
-          const seedSql = seed.sql.trim();
-          if (seedSql) await tx.unsafe(seedSql);
-        }
-      }
-
+    await startDatabase({
+      databaseUrl,
+      migrationDatabaseUrl,
+      runtime: "bun",
+      environment: "local",
+      applicationRoot: options?.applicationRoot ?? process.cwd(),
     });
   } finally {
-    await sql.end();
+    await closeNodeDatabasePools();
   }
 }

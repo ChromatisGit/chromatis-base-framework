@@ -1,7 +1,14 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Link } from "react-router";
 import { X, Moon, Sun } from "lucide-react";
-import { motion, useMotionValue, useMotionValueEvent, useTransform, animate, type MotionValue } from "motion/react";
+import {
+  motion,
+  useMotionValue,
+  useMotionValueEvent,
+  useTransform,
+  animate,
+  type MotionValue,
+} from "motion/react";
 import { toggleTheme, type NavItem } from "./navItems.js";
 import type { SidebarBrand } from "./Sidebar.js";
 
@@ -15,7 +22,16 @@ interface Props {
   footerSlot?: ReactNode;
 }
 
-export function MobileMenu({ brand, isOpen, onClose, navItems, pageDragX, isFirstTab, footerSlot }: Props) {
+// eslint-disable-next-line max-lines-per-function -- Focus management, keyboard navigation, and rendering form one accessibility-critical interaction.
+export function MobileMenu({
+  brand,
+  isOpen,
+  onClose,
+  navItems,
+  pageDragX,
+  isFirstTab,
+  footerSlot,
+}: Props) {
   // Drawer position: 0 = fully open, -drawerWidth = fully closed
   const drawerX = useMotionValue(-300);
   const drawerWidthRef = useRef(300);
@@ -38,13 +54,15 @@ export function MobileMenu({ brand, isOpen, onClose, navItems, pageDragX, isFirs
   useEffect(() => {
     const w = Math.min(window.innerWidth * 0.8, 300);
     drawerWidthRef.current = w;
-    if (!isOpenRef.current) drawerX.set(-w);
+    if (!isOpenRef.current) {
+      drawerX.set(-w);
+    }
   }, [drawerX]);
 
   // Backdrop opacity derived from drawer position
   const backdropOpacity = useTransform(drawerX, (v) => {
     const w = drawerWidthRef.current;
-    return Math.max(0, Math.min(0.35, (v + w) / w * 0.35));
+    return Math.max(0, Math.min(0.35, ((v + w) / w) * 0.35));
   });
 
   // Sync drawer position with the page drag so it peeks in as the page slides right
@@ -67,14 +85,24 @@ export function MobileMenu({ brand, isOpen, onClose, navItems, pageDragX, isFirs
     if (isOpen) {
       void animate(drawerX, 0, { type: "spring", stiffness: 400, damping: 40 });
     } else {
-      void animate(drawerX, -w, { type: "tween", duration: 0.2, ease: "easeOut" });
+      void animate(drawerX, -w, {
+        type: "tween",
+        duration: 0.2,
+        ease: "easeOut",
+      });
     }
   }, [isOpen, drawerX]);
 
   // Body scroll lock + keyboard close
   useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    if (!isOpen) {
+      return;
+    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", handleKeyDown);
     return () => {
@@ -86,18 +114,28 @@ export function MobileMenu({ brand, isOpen, onClose, navItems, pageDragX, isFirs
   // Non-passive touchmove on the drawer so we can preventDefault during swipe-to-close
   useEffect(() => {
     const el = asideRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
 
     function onTouchMove(e: TouchEvent) {
-      if (!isOpenRef.current) return;
+      if (!isOpenRef.current) {
+        return;
+      }
       const touch = e.touches[0];
-      if (!touch) return;
+      if (!touch) {
+        return;
+      }
 
       const dx = touch.clientX - swipeStartX.current;
 
       if (!isSwipeConfirmedRef.current) {
-        if (Math.abs(dx) < 8) return;
-        if (dx >= 0) return; // right swipe on open drawer — ignore
+        if (Math.abs(dx) < 8) {
+          return;
+        }
+        if (dx >= 0) {
+          return;
+        } // right swipe on open drawer — ignore
         isSwipeConfirmedRef.current = true;
       }
 
@@ -112,17 +150,23 @@ export function MobileMenu({ brand, isOpen, onClose, navItems, pageDragX, isFirs
 
   function handleSwipeTouchStart(e: React.TouchEvent) {
     const touch = e.touches[0];
-    if (!touch) return;
+    if (!touch) {
+      return;
+    }
     swipeStartX.current = touch.clientX;
     isSwipeConfirmedRef.current = false;
   }
 
   function handleSwipeTouchEnd(e: React.TouchEvent) {
-    if (!isSwipeConfirmedRef.current) return;
+    if (!isSwipeConfirmedRef.current) {
+      return;
+    }
     isSwipeConfirmedRef.current = false;
 
     const touch = e.changedTouches[0];
-    if (!touch) return;
+    if (!touch) {
+      return;
+    }
 
     const dx = touch.clientX - swipeStartX.current;
     const velocity = drawerX.getVelocity(); // px/s, negative = leftward
@@ -130,7 +174,11 @@ export function MobileMenu({ brand, isOpen, onClose, navItems, pageDragX, isFirs
 
     if (dx < -(w * 0.35) || velocity < -400) {
       // Animate fully closed, then call onClose so isOpen transitions cleanly
-      void animate(drawerX, -w, { type: "tween", duration: 0.2, ease: "easeOut" }).then(() => {
+      void animate(drawerX, -w, {
+        type: "tween",
+        duration: 0.2,
+        ease: "easeOut",
+      }).then(() => {
         onClose();
       });
     } else {
@@ -161,9 +209,13 @@ export function MobileMenu({ brand, isOpen, onClose, navItems, pageDragX, isFirs
         <div className="flex items-center justify-between px-4 py-4 border-b border-border flex-shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
-              <span className="text-primary-foreground text-xs font-bold">{brand.initial}</span>
+              <span className="text-primary-foreground text-xs font-bold">
+                {brand.initial}
+              </span>
             </div>
-            <span className="text-sm font-semibold text-foreground">{brand.name}</span>
+            <span className="text-sm font-semibold text-foreground">
+              {brand.name}
+            </span>
           </div>
           <button
             type="button"
@@ -176,7 +228,10 @@ export function MobileMenu({ brand, isOpen, onClose, navItems, pageDragX, isFirs
         </div>
 
         {/* Nav items */}
-        <nav className="flex-1 overflow-y-auto p-3 flex flex-col gap-0.5" onClick={onClose}>
+        <nav
+          className="flex-1 overflow-y-auto p-3 flex flex-col gap-0.5"
+          onClick={onClose}
+        >
           {navItems.map(({ path, label, icon: Icon, badge }) => (
             <Link
               key={path}
@@ -200,11 +255,18 @@ export function MobileMenu({ brand, isOpen, onClose, navItems, pageDragX, isFirs
         <div className="flex-shrink-0 border-t border-border p-3 flex flex-col gap-0.5">
           <button
             type="button"
-            onClick={() => { toggleTheme(); onClose(); }}
+            onClick={() => {
+              toggleTheme();
+              onClose();
+            }}
             className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           >
             <Moon size={18} className="flex-shrink-0 dark:hidden" aria-hidden />
-            <Sun size={18} className="flex-shrink-0 hidden dark:block" aria-hidden />
+            <Sun
+              size={18}
+              className="flex-shrink-0 hidden dark:block"
+              aria-hidden
+            />
             <span>Toggle theme</span>
           </button>
 

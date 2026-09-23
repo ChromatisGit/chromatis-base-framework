@@ -1,8 +1,8 @@
-import { type HTMLAttributes } from "react"
-import { cn } from "../primitives/cn"
+import { type HTMLAttributes } from "react";
+import { cn } from "../primitives/cn";
 
 interface ActionBarProps extends HTMLAttributes<HTMLDivElement> {
-  align?: "start" | "end" | "center" | "between"
+  align?: "start" | "end" | "center" | "between";
 }
 
 const alignClass = {
@@ -10,9 +10,14 @@ const alignClass = {
   end: "justify-end",
   center: "justify-center",
   between: "justify-between",
-}
+};
 
-export function ActionBar({ align = "start", className, children, ...props }: ActionBarProps) {
+export function ActionBar({
+  align = "start",
+  className,
+  children,
+  ...props
+}: ActionBarProps) {
   return (
     <div
       className={cn(
@@ -24,5 +29,5 @@ export function ActionBar({ align = "start", className, children, ...props }: Ac
     >
       {children}
     </div>
-  )
+  );
 }

@@ -2,14 +2,20 @@ import type { ButtonHTMLAttributes } from "react";
 
 import { cn } from "./cn.js";
 
-type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "destructive";
+type ButtonVariant =
+  | "primary"
+  | "secondary"
+  | "outline"
+  | "ghost"
+  | "destructive";
 type ButtonSize = "sm" | "md" | "lg" | "icon";
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary: "bg-primary text-primary-foreground hover:opacity-90",
   secondary: "bg-muted text-foreground hover:bg-accent",
   outline: "border border-border bg-card text-foreground hover:bg-accent",
-  ghost: "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+  ghost:
+    "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
   destructive: "bg-destructive text-destructive-foreground hover:opacity-90",
 };
 

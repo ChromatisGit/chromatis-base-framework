@@ -1,10 +1,15 @@
+import path from "node:path";
 import { generateRoutineMigration } from "./dbGeneratedMigrations.ts";
 
-const description = process.argv.slice(2).join(" ");
+const [moduleName, ...descriptionParts] = process.argv.slice(2);
+const description = descriptionParts.join(" ");
 
-if (!description.trim()) {
-  console.error("Usage: bun run node_modules/@chromatis/base/infra/scripts/dbGenerate.ts <description>");
+if (!moduleName || !description.trim()) {
+  console.error("Usage: bun run db generate <module> <description>");
   process.exit(1);
 }
 
-generateRoutineMigration(description);
+generateRoutineMigration(
+  description,
+  path.resolve(process.cwd(), "src/modules", moduleName),
+);

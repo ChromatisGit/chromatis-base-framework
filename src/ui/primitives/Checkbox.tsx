@@ -1,16 +1,26 @@
-import { type InputHTMLAttributes, useId } from "react"
-import { Check } from "lucide-react"
-import { cn } from "./cn"
+import { type InputHTMLAttributes, useId } from "react";
+import { Check } from "lucide-react";
+import { cn } from "./cn";
 
-interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "type"> {
-  label: string
-  description?: string
-  error?: string
+interface CheckboxProps extends Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "type"
+> {
+  label: string;
+  description?: string;
+  error?: string;
 }
 
-export function Checkbox({ label, description, error, id, className, ...props }: CheckboxProps) {
-  const generatedId = useId()
-  const checkboxId = id ?? generatedId
+export function Checkbox({
+  label,
+  description,
+  error,
+  id,
+  className,
+  ...props
+}: CheckboxProps) {
+  const generatedId = useId();
+  const checkboxId = id ?? generatedId;
 
   return (
     <div className={cn("flex items-start gap-3", className)}>
@@ -29,10 +39,13 @@ export function Checkbox({ label, description, error, id, className, ...props }:
             "peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-1",
             "peer-checked:bg-primary peer-checked:border-primary",
             "peer-disabled:opacity-50 peer-disabled:cursor-not-allowed",
-            error ? "border-destructive" : "border-border bg-input-background"
+            error ? "border-destructive" : "border-border bg-input-background",
           )}
         >
-          <Check className="hidden h-3 w-3 text-primary-foreground peer-checked:block [.peer:checked~&]:block" strokeWidth={3} />
+          <Check
+            className="hidden h-3 w-3 text-primary-foreground peer-checked:block [.peer:checked~&]:block"
+            strokeWidth={3}
+          />
         </label>
       </div>
       <div className="flex flex-col gap-0.5 min-w-0">
@@ -45,10 +58,8 @@ export function Checkbox({ label, description, error, id, className, ...props }:
         {description && (
           <p className="text-xs text-muted-foreground">{description}</p>
         )}
-        {error && (
-          <p className="text-xs text-destructive">{error}</p>
-        )}
+        {error && <p className="text-xs text-destructive">{error}</p>}
       </div>
     </div>
-  )
+  );
 }

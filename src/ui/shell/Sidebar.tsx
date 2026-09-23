@@ -22,6 +22,7 @@ interface Props {
   navSlot?: ReactNode;
 }
 
+// eslint-disable-next-line max-lines-per-function -- Desktop navigation structure and accessibility behavior form one cohesive primitive.
 export function Sidebar({
   brand,
   mainNavItems,
@@ -47,7 +48,12 @@ export function Sidebar({
 
   function renderNavItem({ path, label, icon: Icon, badge }: NavItem) {
     return (
-      <Link key={path} to={path} className={itemClass(path)} title={collapsed ? label : undefined}>
+      <Link
+        key={path}
+        to={path}
+        className={itemClass(path)}
+        title={collapsed ? label : undefined}
+      >
         <Icon size={18} className="flex-shrink-0" aria-hidden />
         {!collapsed && (
           <>
@@ -83,24 +89,42 @@ export function Sidebar({
       )}
 
       {/* Brand */}
-      <div className={cn("border-b border-border flex-shrink-0", collapsed ? "px-3 py-5 flex justify-center" : "px-4 py-5")}>
+      <div
+        className={cn(
+          "border-b border-border flex-shrink-0",
+          collapsed ? "px-3 py-5 flex justify-center" : "px-4 py-5",
+        )}
+      >
         <Link
           to={brand.href ?? "/"}
-          className={cn("flex items-center gap-3 no-underline", collapsed && "justify-center")}
+          className={cn(
+            "flex items-center gap-3 no-underline",
+            collapsed && "justify-center",
+          )}
         >
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
-            <span className="text-primary-foreground text-sm font-bold">{brand.initial}</span>
+            <span className="text-primary-foreground text-sm font-bold">
+              {brand.initial}
+            </span>
           </div>
           {!collapsed && (
-            <span className="text-base font-semibold text-foreground whitespace-nowrap">{brand.name}</span>
+            <span className="text-base font-semibold text-foreground whitespace-nowrap">
+              {brand.name}
+            </span>
           )}
         </Link>
       </div>
 
       {/* Nav */}
       <nav
-        className={cn("flex-1 overflow-y-auto flex flex-col gap-0.5", collapsed ? "p-1.5" : "p-2")}
-        style={{ scrollbarWidth: "thin", scrollbarColor: "var(--border) transparent" }}
+        className={cn(
+          "flex-1 overflow-y-auto flex flex-col gap-0.5",
+          collapsed ? "p-1.5" : "p-2",
+        )}
+        style={{
+          scrollbarWidth: "thin",
+          scrollbarColor: "var(--border) transparent",
+        }}
         aria-label="Main navigation"
       >
         {mainNavItems.map(renderNavItem)}
@@ -123,7 +147,12 @@ export function Sidebar({
       </nav>
 
       {/* Bottom: theme toggle (always) + user slot (expanded only) */}
-      <div className={cn("flex-shrink-0 border-t border-border flex flex-col gap-0.5", collapsed ? "p-1.5" : "p-2")}>
+      <div
+        className={cn(
+          "flex-shrink-0 border-t border-border flex flex-col gap-0.5",
+          collapsed ? "p-1.5" : "p-2",
+        )}
+      >
         <button
           type="button"
           onClick={toggleTheme}
@@ -135,7 +164,11 @@ export function Sidebar({
           aria-label="Toggle theme"
         >
           <Moon size={18} className="flex-shrink-0 dark:hidden" aria-hidden />
-          <Sun size={18} className="flex-shrink-0 hidden dark:block" aria-hidden />
+          <Sun
+            size={18}
+            className="flex-shrink-0 hidden dark:block"
+            aria-hidden
+          />
           {!collapsed && <span>Toggle theme</span>}
         </button>
 

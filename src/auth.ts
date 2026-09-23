@@ -1,18 +1,40 @@
-export { getSessionCookie, buildSetSessionCookie, buildClearSessionCookie } from "./auth/cookie.server.js";
-export type { SessionCookieConfig } from "./auth/cookie.server.js";
 export { hashPin, verifyPin } from "./auth/hash.server.js";
-export { createSessionService } from "./auth/session.server.js";
-export type { SessionService, SessionServiceOptions } from "./auth/session.server.js";
-export { requireSessionCookie, isAdmin, assertLoggedIn, assertAdminAccess } from "./auth/guard.server.js";
-export type { UserDTO, UserRole, Session, LoginResult, RegisterResult } from "./auth/types.js";
+export { authMigrations } from "./auth/migrations.js";
 export {
-  hasAnyUsers,
-  registerUser,
-  loginUser,
+  createDatabaseOidcAuthorizationAttemptStore,
+  createOidcProvider,
+  OidcAuthenticationError,
+} from "./auth/oidc.js";
+export { hasPermission, requirePermission } from "./auth/permissions.server.js";
+export { requireUser, withAuthentication } from "./auth/request-context.js";
+export { createSessionManager } from "./auth/session.server.js";
+export { resolveExternalIdentity } from "./auth/sso.server.js";
+export {
   getUserById,
-  getUserByUsername,
-  enableUser,
-  disableUser,
-  setUserRole,
-  listUsers,
+  loginUser,
+  registerUser,
+  setUserEnabled,
 } from "./auth/users.server.js";
+export type {
+  AuthContext,
+  AuthenticatedRequestHandler,
+} from "./auth/request-context.js";
+export type {
+  OidcAuthenticationFailure,
+  OidcAuthorizationAttempt,
+  OidcAuthorizationAttemptStore,
+  OidcConfiguration,
+  OidcProviderDependencies,
+} from "./auth/oidc.js";
+export type {
+  SessionManager,
+  SessionManagerOptions,
+} from "./auth/session.server.js";
+export type {
+  ExternalIdentity,
+  LoginResult,
+  RegisterResult,
+  Session,
+  SSOProvider,
+  User,
+} from "./auth/types.js";
