@@ -11,7 +11,13 @@ interface Props {
   secondaryNavItems: readonly NavItem[];
 }
 
-export function NavigationDrawer({ brand, isOpen, onClose, mainNavItems, secondaryNavItems }: Props) {
+export function NavigationDrawer({
+  brand,
+  isOpen,
+  onClose,
+  mainNavItems,
+  secondaryNavItems,
+}: Props) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -44,7 +50,9 @@ export function NavigationDrawer({ brand, isOpen, onClose, mainNavItems, seconda
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-border">
-            <h2 className="text-xl font-medium text-foreground">{brand.name}</h2>
+            <h2 className="text-xl font-medium text-foreground">
+              {brand.name}
+            </h2>
             <button
               onClick={onClose}
               className="p-2 rounded-full hover:bg-muted transition-colors"
@@ -67,8 +75,8 @@ export function NavigationDrawer({ brand, isOpen, onClose, mainNavItems, seconda
                     isActive
                       ? "bg-primary text-primary-foreground"
                       : item.secondary
-                      ? "text-muted-foreground hover:bg-muted hover:text-foreground"
-                      : "text-foreground hover:bg-muted"
+                        ? "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        : "text-foreground hover:bg-muted"
                   }`}
                 >
                   <Icon className="w-5 h-5" />

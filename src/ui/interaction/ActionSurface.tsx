@@ -1,8 +1,8 @@
-import { type ButtonHTMLAttributes } from "react"
-import { cn } from "../primitives/cn"
+import { type ButtonHTMLAttributes } from "react";
+import { cn } from "../primitives/cn";
 
 interface ActionSurfaceProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  rounded?: "sm" | "md" | "lg" | "xl" | "2xl" | "full"
+  rounded?: "sm" | "md" | "lg" | "xl" | "2xl" | "full";
 }
 
 const roundedClass = {
@@ -12,9 +12,14 @@ const roundedClass = {
   xl: "rounded-3xl",
   "2xl": "rounded-[2rem]",
   full: "rounded-full",
-}
+};
 
-export function ActionSurface({ rounded = "xl", className, children, ...props }: ActionSurfaceProps) {
+export function ActionSurface({
+  rounded = "xl",
+  className,
+  children,
+  ...props
+}: ActionSurfaceProps) {
   return (
     <button
       type="button"
@@ -30,5 +35,5 @@ export function ActionSurface({ rounded = "xl", className, children, ...props }:
     >
       {children}
     </button>
-  )
+  );
 }

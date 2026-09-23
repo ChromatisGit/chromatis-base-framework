@@ -23,7 +23,9 @@ export function MobileBottomNav({ navItems }: Props) {
             to={path}
             className={cn(
               "flex-1 flex flex-col items-center justify-center gap-1 py-2.5 min-h-[56px] text-xs font-medium transition-colors no-underline",
-              isActive ? "text-primary" : "text-muted-foreground hover:text-foreground",
+              isActive
+                ? "text-primary"
+                : "text-muted-foreground hover:text-foreground",
             )}
             aria-current={isActive ? "page" : undefined}
           >

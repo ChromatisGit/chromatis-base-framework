@@ -1,11 +1,16 @@
-import { type HTMLAttributes } from "react"
-import { cn } from "../primitives/cn"
+import { type HTMLAttributes } from "react";
+import { cn } from "../primitives/cn";
 
 interface DataListProps extends HTMLAttributes<HTMLDivElement> {
-  flush?: boolean
+  flush?: boolean;
 }
 
-export function DataList({ flush = false, className, children, ...props }: DataListProps) {
+export function DataList({
+  flush = false,
+  className,
+  children,
+  ...props
+}: DataListProps) {
   return (
     <div
       className={cn(
@@ -17,5 +22,5 @@ export function DataList({ flush = false, className, children, ...props }: DataL
     >
       {children}
     </div>
-  )
+  );
 }

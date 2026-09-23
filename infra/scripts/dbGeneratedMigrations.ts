@@ -55,7 +55,9 @@ function sha256(input: string): string {
 }
 
 function readSqlFiles(dir: string): string[] {
-  if (!existsSync(dir)) return [];
+  if (!existsSync(dir)) {
+    return [];
+  }
 
   const entries = readdirSync(dir, { withFileTypes: true })
     .map((entry) => ({
@@ -65,23 +67,25 @@ function readSqlFiles(dir: string): string[] {
     .sort((a, b) => a.entry.name.localeCompare(b.entry.name));
 
   return entries.flatMap(({ entry, fullPath }) => {
-    if (entry.isDirectory()) return readSqlFiles(fullPath);
-    if (entry.isFile() && entry.name.endsWith(".sql")) return [fullPath];
+    if (entry.isDirectory()) {
+      return readSqlFiles(fullPath);
+    }
+    if (entry.isFile() && entry.name.endsWith(".sql")) {
+      return [fullPath];
+    }
     return [];
   });
 }
 
 function stripSqlComments(sql: string): string {
-  return sql
-    .replace(/--.*$/gm, "")
-    .replace(/\/\*[\s\S]*?\*\//g, "");
+  return sql.replace(/--.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
 function splitTopLevel(input: string): string[] {
   const parts: string[] = [];
   let current = "";
   let depth = 0;
-  let quote: "'" | "\"" | null = null;
+  let quote: "'" | '"' | null = null;
 
   for (let i = 0; i < input.length; i += 1) {
     const ch = input[i]!;
@@ -98,14 +102,18 @@ function splitTopLevel(input: string): string[] {
       continue;
     }
 
-    if (ch === "'" || ch === "\"") {
+    if (ch === "'" || ch === '"') {
       quote = ch;
       current += ch;
       continue;
     }
 
-    if (ch === "(") depth += 1;
-    if (ch === ")") depth = Math.max(0, depth - 1);
+    if (ch === "(") {
+      depth += 1;
+    }
+    if (ch === ")") {
+      depth = Math.max(0, depth - 1);
+    }
 
     if (ch === "," && depth === 0) {
       parts.push(current.trim());
@@ -116,7 +124,9 @@ function splitTopLevel(input: string): string[] {
     current += ch;
   }
 
-  if (current.trim()) parts.push(current.trim());
+  if (current.trim()) {
+    parts.push(current.trim());
+  }
   return parts;
 }
 
@@ -126,18 +136,26 @@ function normalizeFunctionArg(arg: string): string | null {
     .replace(/\s+=\s+[\s\S]*$/i, "")
     .trim();
 
-  if (!withoutDefault) return null;
+  if (!withoutDefault) {
+    return null;
+  }
 
   const tokens = withoutDefault.split(/\s+/).filter(Boolean);
   const mode = tokens[0]?.toUpperCase();
 
-  if (mode === "OUT") return null;
+  if (mode === "OUT") {
+    return null;
+  }
   if (mode === "IN" || mode === "INOUT" || mode === "VARIADIC") {
     tokens.shift();
   }
 
-  if (tokens.length === 0) return null;
-  if (tokens.length === 1) return tokens[0]!;
+  if (tokens.length === 0) {
+    return null;
+  }
+  if (tokens.length === 1) {
+    return tokens[0]!;
+  }
 
   return tokens.slice(1).join(" ");
 }
@@ -149,24 +167,33 @@ function getFunctionSignature(name: string, args: string): string {
   return `${name}(${argTypes.join(", ")})`;
 }
 
-function extractRoutineObjects(kind: RoutineKind, sql: string): RoutineObject[] {
+function extractRoutineObjects(
+  kind: RoutineKind,
+  sql: string,
+): RoutineObject[] {
   const withoutComments = stripSqlComments(sql);
   const objects: RoutineObject[] = [];
 
   if (kind === "view") {
-    const viewRe = /\bCREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+((?:"[^"]+"|[a-z_][\w$]*)(?:\.(?:"[^"]+"|[a-z_][\w$]*))?)/gi;
+    const viewRe =
+      /\bCREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+((?:"[^"]+"|[a-z_][\w$]*)(?:\.(?:"[^"]+"|[a-z_][\w$]*))?)/gi;
     for (const match of withoutComments.matchAll(viewRe)) {
       const name = match[1]?.trim();
-      if (name) objects.push({ kind, name });
+      if (name) {
+        objects.push({ kind, name });
+      }
     }
     return objects;
   }
 
-  const functionRe = /\bCREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+((?:"[^"]+"|[a-z_][\w$]*)(?:\.(?:"[^"]+"|[a-z_][\w$]*))?)\s*\(([\s\S]*?)\)/gi;
+  const functionRe =
+    /\bCREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+((?:"[^"]+"|[a-z_][\w$]*)(?:\.(?:"[^"]+"|[a-z_][\w$]*))?)\s*\(([\s\S]*?)\)/gi;
   for (const match of withoutComments.matchAll(functionRe)) {
     const name = match[1]?.trim();
     const args = match[2] ?? "";
-    if (name) objects.push({ kind, name, signature: getFunctionSignature(name, args) });
+    if (name) {
+      objects.push({ kind, name, signature: getFunctionSignature(name, args) });
+    }
   }
 
   return objects;
@@ -193,9 +220,7 @@ function loadRoutineState(rootDir = process.cwd()): RoutineState {
   );
 
   const combinedHash = sha256(
-    files
-      .map((file) => `${file.kind}:${file.path}:${file.hash}`)
-      .join("\n"),
+    files.map((file) => `${file.kind}:${file.path}:${file.hash}`).join("\n"),
   );
 
   return { combinedHash, files };
@@ -207,7 +232,9 @@ function manifestPath(rootDir = process.cwd()): string {
 
 function loadRoutineManifest(rootDir = process.cwd()): RoutineManifest | null {
   const filePath = manifestPath(rootDir);
-  if (!existsSync(filePath)) return null;
+  if (!existsSync(filePath)) {
+    return null;
+  }
 
   const parsed = JSON.parse(readFileSync(filePath, "utf8")) as RoutineManifest;
   if (parsed.version !== MANIFEST_VERSION) {
@@ -249,6 +276,13 @@ function writeRoutineManifest(
   );
 }
 
+export function writeNewMigrationFile(
+  migrationPath: string,
+  sql: string,
+): void {
+  writeFileSync(migrationPath, sql, { encoding: "utf8", flag: "wx" });
+}
+
 function formatObjectDrop(object: RoutineObject): string {
   if (object.kind === "function") {
     return `DROP FUNCTION IF EXISTS ${object.signature ?? `${object.name}()`};`;
@@ -270,8 +304,12 @@ function getChangedFiles(
   const currentByPath = new Map(state.files.map((file) => [file.path, file]));
 
   return {
-    addedOrChanged: state.files.filter((file) => previousByPath.get(file.path)?.hash !== file.hash),
-    removed: [...previousByPath.values()].filter((file) => !currentByPath.has(file.path)),
+    addedOrChanged: state.files.filter(
+      (file) => previousByPath.get(file.path)?.hash !== file.hash,
+    ),
+    removed: [...previousByPath.values()].filter(
+      (file) => !currentByPath.has(file.path),
+    ),
     previousByPath,
   };
 }
@@ -280,7 +318,10 @@ function buildRoutineMigrationSql(
   state: RoutineState,
   manifest: RoutineManifest | null,
 ): string {
-  const { addedOrChanged, removed, previousByPath } = getChangedFiles(state, manifest);
+  const { addedOrChanged, removed, previousByPath } = getChangedFiles(
+    state,
+    manifest,
+  );
   const changedPreviousObjects = addedOrChanged.flatMap(
     (file) => previousByPath.get(file.path)?.objects ?? [],
   );
@@ -290,24 +331,38 @@ function buildRoutineMigrationSql(
   const functionDrops = objectsToDrop
     .filter((object) => object.kind === "function")
     .map(formatObjectDrop);
-  const viewDrops = objectsToDrop
+  const rebuildDeclaredViews = functionDrops.length > 0;
+  const viewObjectsToDrop = rebuildDeclaredViews
+    ? (manifest?.files ?? [])
+        .filter((file) => file.kind === "view")
+        .flatMap((file) => file.objects)
+    : objectsToDrop.filter((object) => object.kind === "view");
+  const viewDrops = viewObjectsToDrop
     .filter((object) => object.kind === "view")
     .map(formatObjectDrop);
 
   const sections = [
-    "-- Generated by @chromatis/base. Edit sql/views/*.sql and sql/functions/*.sql, then regenerate.",
+    "-- Generated by @chromatis/base. Edit this module's sql/views or sql/functions, then regenerate.",
   ];
 
   if (functionDrops.length > 0 || viewDrops.length > 0) {
     sections.push(
-      ["-- Drop changed or removed routines", ...functionDrops, ...viewDrops].join("\n"),
+      [
+        "-- Drop changed or removed routines",
+        ...viewDrops,
+        ...functionDrops,
+      ].join("\n"),
     );
   }
 
-  const changedViews = addedOrChanged.filter((file) => file.kind === "view");
-  const changedFunctions = addedOrChanged.filter((file) => file.kind === "function");
+  const changedViews = (
+    rebuildDeclaredViews ? state.files : addedOrChanged
+  ).filter((file) => file.kind === "view");
+  const changedFunctions = addedOrChanged.filter(
+    (file) => file.kind === "function",
+  );
 
-  for (const file of [...changedViews, ...changedFunctions]) {
+  for (const file of [...changedFunctions, ...changedViews]) {
     sections.push(`-- ${file.path}\n${file.sql.trim()}`);
   }
 
@@ -316,19 +371,38 @@ function buildRoutineMigrationSql(
 
 function parseVersion(version: string): [number, number, number] {
   const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
-  if (!match) throw new Error(`[db] Invalid migration version: ${version}`);
+  if (!match) {
+    throw new Error(`[db] Invalid migration version: ${version}`);
+  }
   return [Number(match[1]), Number(match[2]), Number(match[3])];
 }
 
 function nextPatchVersion(rootDir = process.cwd()): string {
-  const migrationsDir = path.join(rootDir, "sql/migrations");
+  const migrationsDir = path.join(rootDir, "migrations");
   const latest = existsSync(migrationsDir)
     ? readdirSync(migrationsDir, { withFileTypes: true })
-      .filter((entry) => entry.isFile())
-      .map((entry) => /^(\d+\.\d+\.\d+)__[a-z0-9][a-z0-9_-]*\.sql$/i.exec(entry.name)?.[1])
-      .filter((version): version is string => Boolean(version))
-      .sort((a, b) => a.localeCompare(b))
-      .at(-1)
+        .filter((entry) => entry.isFile())
+        .map((entry) => {
+          const match = /^(\d+\.\d+\.\d+)__[a-z0-9][a-z0-9_-]*\.sql$/i.exec(
+            entry.name,
+          );
+          if (!match) {
+            throw new Error(`[db] Invalid migration filename: ${entry.name}`);
+          }
+          return match[1]!;
+        })
+        .sort((left, right) => {
+          const leftParts = parseVersion(left);
+          const rightParts = parseVersion(right);
+          for (let index = 0; index < leftParts.length; index += 1) {
+            const difference = leftParts[index]! - rightParts[index]!;
+            if (difference !== 0) {
+              return difference;
+            }
+          }
+          return 0;
+        })
+        .at(-1)
     : undefined;
   const [major, minor, patch] = parseVersion(latest ?? "0.0.0");
   return `${major}.${minor}.${patch + 1}`;
@@ -345,9 +419,10 @@ function slugifyDescription(description: string): string {
 
 export function checkGeneratedMigrationState(rootDir = process.cwd()): void {
   const state = loadRoutineState(rootDir);
-  if (state.files.length === 0) return;
-
   const manifest = loadRoutineManifest(rootDir);
+  if (state.files.length === 0 && !manifest) {
+    return;
+  }
   if (!manifest) {
     throw new Error(
       "[db] SQL routine sources are not tracked. Run `bun run db:generate <description>` and commit the generated migration + manifest.",
@@ -369,6 +444,20 @@ export function checkGeneratedMigrationState(rootDir = process.cwd()): void {
   }
 }
 
+export function checkGeneratedMigrationStates(
+  applicationRoot = process.cwd(),
+): void {
+  const modulesDirectory = path.join(applicationRoot, "src/modules");
+  if (!existsSync(modulesDirectory)) {
+    return;
+  }
+  for (const entry of readdirSync(modulesDirectory, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      checkGeneratedMigrationState(path.join(modulesDirectory, entry.name));
+    }
+  }
+}
+
 export function generateRoutineMigration(
   description: string,
   rootDir = process.cwd(),
@@ -381,7 +470,7 @@ export function generateRoutineMigration(
   const state = loadRoutineState(rootDir);
   const manifest = loadRoutineManifest(rootDir);
 
-  if (state.files.length === 0) {
+  if (state.files.length === 0 && !manifest) {
     console.info("[db] No SQL routine sources found.");
     return null;
   }
@@ -393,14 +482,16 @@ export function generateRoutineMigration(
 
   const version = nextPatchVersion(rootDir);
   const filename = `${version}__${slug}.sql`;
-  const migrationPath = path.join(rootDir, "sql/migrations", filename);
+  const migrationPath = path.join(rootDir, "migrations", filename);
   const sql = buildRoutineMigrationSql(state, manifest);
 
   mkdirSync(path.dirname(migrationPath), { recursive: true });
-  writeFileSync(migrationPath, sql, "utf8");
+  writeNewMigrationFile(migrationPath, sql);
   writeRoutineManifest(state, filename, rootDir);
 
-  console.info(`[db] Wrote ${normalizePath(path.relative(rootDir, migrationPath))}`);
+  console.info(
+    `[db] Wrote ${normalizePath(path.relative(rootDir, migrationPath))}`,
+  );
   console.info(`[db] Updated ${ROUTINE_MANIFEST_PATH}`);
   return filename;
 }

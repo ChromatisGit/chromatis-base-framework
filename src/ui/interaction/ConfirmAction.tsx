@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react"
+import { type ReactNode, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -6,17 +6,17 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "../primitives/Dialog"
-import { Button } from "../primitives/Button"
+} from "../primitives/Dialog";
+import { Button } from "../primitives/Button";
 
 interface ConfirmActionProps {
-  trigger: ReactNode
-  title?: string
-  description?: string
-  confirmLabel?: string
-  cancelLabel?: string
-  variant?: "destructive" | "default"
-  onConfirm: () => void | Promise<void>
+  trigger: ReactNode;
+  title?: string;
+  description?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  variant?: "destructive" | "default";
+  onConfirm: () => void | Promise<void>;
 }
 
 export function ConfirmAction({
@@ -28,35 +28,38 @@ export function ConfirmAction({
   variant = "default",
   onConfirm,
 }: ConfirmActionProps) {
-  const [open, setOpen] = useState(false)
-  const [pending, setPending] = useState(false)
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
 
   async function handleConfirm() {
-    setPending(true)
+    setPending(true);
     try {
-      await onConfirm()
-      setOpen(false)
+      await onConfirm();
+      setOpen(false);
     } finally {
-      setPending(false)
+      setPending(false);
     }
   }
 
   return (
     <>
-      <span
-        onClick={() => setOpen(true)}
-        style={{ display: "contents" }}
-      >
+      <span onClick={() => setOpen(true)} style={{ display: "contents" }}>
         {trigger}
       </span>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
-            {description && <DialogDescription>{description}</DialogDescription>}
+            {description && (
+              <DialogDescription>{description}</DialogDescription>
+            )}
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
+            <Button
+              variant="ghost"
+              onClick={() => setOpen(false)}
+              disabled={pending}
+            >
               {cancelLabel}
             </Button>
             <Button
@@ -70,5 +73,5 @@ export function ConfirmAction({
         </DialogContent>
       </Dialog>
     </>
-  )
+  );
 }

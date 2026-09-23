@@ -19,12 +19,11 @@ export function EmptyState({
   ...props
 }: EmptyStateProps) {
   return (
-    <Card
-      className={cn("w-full px-6 py-10 text-center", className)}
-      {...props}
-    >
+    <Card className={cn("w-full px-6 py-10 text-center", className)} {...props}>
       <div className="space-y-4">
-        {icon ? <div className="mx-auto flex justify-center">{icon}</div> : null}
+        {icon ? (
+          <div className="mx-auto flex justify-center">{icon}</div>
+        ) : null}
         <div className="space-y-2">
           <h2 className="text-xl font-medium text-foreground">{title}</h2>
           <p className="text-sm text-muted-foreground">{description}</p>

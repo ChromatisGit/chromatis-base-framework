@@ -1,13 +1,13 @@
-import type { ReactNode } from "react"
-import { useBreakpoint } from "../lib/useBreakpoint"
-import { cn } from "../primitives/cn"
+import type { ReactNode } from "react";
+import { useBreakpoint } from "../lib/useBreakpoint";
+import { cn } from "../primitives/cn";
 
 interface ListDetailProps {
-  list: ReactNode
-  detail: ReactNode
-  detailActive: boolean
-  emptyDetail?: ReactNode
-  listWidth?: number
+  list: ReactNode;
+  detail: ReactNode;
+  detailActive: boolean;
+  emptyDetail?: ReactNode;
+  listWidth?: number;
 }
 
 export function ListDetail({
@@ -17,7 +17,7 @@ export function ListDetail({
   emptyDetail,
   listWidth = 320,
 }: ListDetailProps) {
-  const breakpoint = useBreakpoint()
+  const breakpoint = useBreakpoint();
 
   if (breakpoint === "mobile") {
     return (
@@ -29,7 +29,7 @@ export function ListDetail({
           {detail}
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -44,5 +44,5 @@ export function ListDetail({
         {detailActive ? detail : (emptyDetail ?? null)}
       </div>
     </div>
-  )
+  );
 }

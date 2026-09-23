@@ -8,7 +8,9 @@ type SheetSide = "top" | "right" | "bottom" | "left";
 const SHEET_ANIMATION_MS = 420;
 
 function getSheetTransform(side: SheetSide, visualState: "open" | "closed") {
-  if (visualState === "open") return "translate3d(0, 0, 0)";
+  if (visualState === "open") {
+    return "translate3d(0, 0, 0)";
+  }
 
   switch (side) {
     case "bottom":
@@ -71,11 +73,15 @@ export function SheetTrigger({
   };
 
   if (asChild && React.isValidElement(children)) {
-    const child = children as React.ReactElement<{ onClick?: React.MouseEventHandler<HTMLElement> }>;
+    const child = children as React.ReactElement<{
+      onClick?: React.MouseEventHandler<HTMLElement>;
+    }>;
     return React.cloneElement(child, {
       onClick: (event: React.MouseEvent<HTMLElement>) => {
         child.props.onClick?.(event);
-        if (!event.defaultPrevented) handleOpen(event);
+        if (!event.defaultPrevented) {
+          handleOpen(event);
+        }
       },
     });
   }
@@ -102,11 +108,15 @@ export function SheetClose({
   };
 
   if (asChild && React.isValidElement(children)) {
-    const child = children as React.ReactElement<{ onClick?: React.MouseEventHandler<HTMLElement> }>;
+    const child = children as React.ReactElement<{
+      onClick?: React.MouseEventHandler<HTMLElement>;
+    }>;
     return React.cloneElement(child, {
       onClick: (event: React.MouseEvent<HTMLElement>) => {
         child.props.onClick?.(event);
-        if (!event.defaultPrevented) handleClose(event);
+        if (!event.defaultPrevented) {
+          handleClose(event);
+        }
       },
     });
   }
@@ -127,10 +137,15 @@ export function SheetContent({
 }: React.HTMLAttributes<HTMLDivElement> & { side?: SheetSide }) {
   const { open, setOpen, triggerRef } = useSheetContext();
   const contentRef = React.useRef<HTMLDivElement>(null);
-  const { isMounted, visualState } = useOverlayMounting(open, SHEET_ANIMATION_MS);
+  const { isMounted, visualState } = useOverlayMounting(
+    open,
+    SHEET_ANIMATION_MS,
+  );
   useOverlayFocus(contentRef, open, setOpen, triggerRef);
 
-  if (!isMounted || typeof document === "undefined") return null;
+  if (!isMounted || typeof document === "undefined") {
+    return null;
+  }
 
   return createPortal(
     <div className="fixed inset-0 z-[60]">
@@ -155,10 +170,14 @@ export function SheetContent({
         className={cn(
           "absolute flex flex-col bg-card text-foreground shadow-2xl outline-none transition-[transform,opacity] ease-out",
           "opacity-100",
-          side === "bottom" && "inset-x-0 bottom-0 max-h-[88dvh] rounded-t-[2rem] border-t border-border",
-          side === "top" && "inset-x-0 top-0 rounded-b-[2rem] border-b border-border",
-          side === "right" && "inset-y-0 right-0 h-full w-full max-w-md border-l border-border",
-          side === "left" && "inset-y-0 left-0 h-full w-full max-w-md border-r border-border",
+          side === "bottom" &&
+            "inset-x-0 bottom-0 max-h-[88dvh] rounded-t-[2rem] border-t border-border",
+          side === "top" &&
+            "inset-x-0 top-0 rounded-b-[2rem] border-b border-border",
+          side === "right" &&
+            "inset-y-0 right-0 h-full w-full max-w-md border-l border-border",
+          side === "left" &&
+            "inset-y-0 left-0 h-full w-full max-w-md border-r border-border",
           className,
         )}
         style={{
@@ -176,18 +195,44 @@ export function SheetContent({
   );
 }
 
-export function SheetHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex flex-col gap-1.5 p-4", className)} {...props} />;
+export function SheetHeader({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div className={cn("flex flex-col gap-1.5 p-4", className)} {...props} />
+  );
 }
 
-export function SheetFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("mt-auto flex flex-col gap-2 p-4", className)} {...props} />;
+export function SheetFooter({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn("mt-auto flex flex-col gap-2 p-4", className)}
+      {...props}
+    />
+  );
 }
 
-export function SheetTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h3 className={cn("text-base font-semibold text-foreground", className)} {...props} />;
+export function SheetTitle({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLHeadingElement>) {
+  return (
+    <h3
+      className={cn("text-base font-semibold text-foreground", className)}
+      {...props}
+    />
+  );
 }
 
-export function SheetDescription({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn("text-sm text-muted-foreground", className)} {...props} />;
+export function SheetDescription({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLParagraphElement>) {
+  return (
+    <p className={cn("text-sm text-muted-foreground", className)} {...props} />
+  );
 }

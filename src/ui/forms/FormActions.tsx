@@ -1,13 +1,17 @@
-import type { ReactNode } from "react"
-import { cn } from "../primitives/cn"
+import type { ReactNode } from "react";
+import { cn } from "../primitives/cn";
 
 interface FormActionsProps {
-  children: ReactNode
-  align?: "start" | "end"
-  className?: string
+  children: ReactNode;
+  align?: "start" | "end";
+  className?: string;
 }
 
-export function FormActions({ children, align = "end", className }: FormActionsProps) {
+export function FormActions({
+  children,
+  align = "end",
+  className,
+}: FormActionsProps) {
   return (
     <div
       className={cn(
@@ -15,10 +19,10 @@ export function FormActions({ children, align = "end", className }: FormActionsP
         "bg-background/95 backdrop-blur-sm -mx-4 px-4",
         "md:static md:bg-transparent md:backdrop-blur-none md:border-none md:-mx-0 md:px-0 md:pb-0",
         align === "end" ? "justify-end" : "justify-start",
-        className
+        className,
       )}
     >
       {children}
     </div>
-  )
+  );
 }

@@ -1,63 +1,135 @@
 import { createNodeAdapter } from "./client.node.js";
 import { createWorkerAdapter } from "./client.worker.js";
-import type { AdapterSetupOptions, DbAdapter, DbSql, MigrationAsset, SeedAsset, UserCtx } from "./types.js";
-export type { DbSql, UserCtx, MigrationAsset, SeedAsset } from "./types.js";
+import { DATABASE_RUNTIME_ROLE } from "./setup.js";
+import { createSqlTag } from "./sql-tag.js";
+import type {
+  AdapterSetupOptions,
+  DatabaseUser,
+  DbAdapter,
+  DbSql,
+  MigrationAsset,
+} from "./types.js";
 
-export type DbRuntime = "node" | "worker";
+export type DatabaseRuntime = "bun" | "cloudflare";
+export type DatabaseEnvironment = "local" | "test" | "production";
+export type Transaction<T> = (sql: DbSql) => Promise<T>;
 
-export interface DbClient {
-  /** Anonymous transaction — no RLS user context. Use for public reads, login, registration. */
-  anonTx<T>(fn: (sql: DbSql) => Promise<T>): Promise<T>;
-  /** Authenticated transaction — sets full RLS context. Use for all user-facing reads/writes. */
-  userTx<T>(user: UserCtx, fn: (sql: DbSql) => Promise<T>): Promise<T>;
-  /**
-   * Apply pending migrations at startup. Call once before serving requests.
-   * Set autoApply=false to skip (use separate migration script instead).
-   */
-  ensureReady(options: EnsureReadyOptions): Promise<void>;
+export interface Database {
+  readonly anonSQL: DbSql;
+  userSQL(user: DatabaseUser): DbSql;
+  anonTransaction<T>(operation: Transaction<T>): Promise<T>;
+  userTransaction<T>(user: DatabaseUser, operation: Transaction<T>): Promise<T>;
 }
 
-export interface EnsureReadyOptions {
-  migrations: readonly MigrationAsset[];
-  seeds?: readonly SeedAsset[];
-  /** Apply pending migrations automatically. Default: true. */
-  autoApply?: boolean;
+export interface DatabaseOptions {
+  readonly runtime: DatabaseRuntime;
+  readonly environment: DatabaseEnvironment;
+  readonly migrationConnectionString?: string;
 }
 
-export function createDb(connectionString: string, runtime: DbRuntime): DbClient {
+type DatabaseSetup = (migrations: readonly MigrationAsset[]) => Promise<void>;
+
+const databaseSetups = new WeakMap<Database, DatabaseSetup>();
+
+function connectionUsername(connectionString: string, label: string): string {
+  let url: URL;
+  try {
+    url = new URL(connectionString);
+  } catch (error) {
+    throw new Error(`[db] ${label} must be a valid PostgreSQL URL.`, {
+      cause: error,
+    });
+  }
+  const username = decodeURIComponent(url.username);
+  if (!username) {
+    throw new Error(`[db] ${label} must include a PostgreSQL role.`);
+  }
+  return username;
+}
+
+function validateCredentials(
+  connectionString: string,
+  options: DatabaseOptions,
+): void {
+  const runtimeRole = connectionUsername(connectionString, "DATABASE_URL");
+  if (runtimeRole !== DATABASE_RUNTIME_ROLE) {
+    throw new Error(
+      `[db] DATABASE_URL must use the ${DATABASE_RUNTIME_ROLE} PostgreSQL role.`,
+    );
+  }
+  const migrationUrl = options.migrationConnectionString;
+  if (!migrationUrl) {
+    if (options.environment !== "production") {
+      throw new Error(
+        "[db] DATABASE_MIGRATION_URL is required for automatic local/test migrations.",
+      );
+    }
+    return;
+  }
+  const migrationRole = connectionUsername(
+    migrationUrl,
+    "DATABASE_MIGRATION_URL",
+  );
+  if (runtimeRole === migrationRole) {
+    throw new Error(
+      "[db] DATABASE_URL and DATABASE_MIGRATION_URL must use distinct PostgreSQL roles.",
+    );
+  }
+}
+
+function createSingleQuerySql(
+  run: <T>(operation: Transaction<T>) => Promise<T>,
+): DbSql {
+  const fragments = createSqlTag(async () => []);
+  const sql = ((first: string | TemplateStringsArray, ...values: unknown[]) => {
+    if (typeof first === "string") {
+      return fragments(first);
+    }
+    return run((transaction) => transaction(first, ...values));
+  }) as DbSql;
+  sql.unsafe = fragments.unsafe;
+  return sql;
+}
+
+export function createDatabase(
+  connectionString: string,
+  options: DatabaseOptions,
+): Database {
+  validateCredentials(connectionString, options);
   const adapter: DbAdapter =
-    runtime === "worker"
-      ? createWorkerAdapter(connectionString)
-      : createNodeAdapter(connectionString);
+    options.runtime === "cloudflare"
+      ? createWorkerAdapter(connectionString, options.migrationConnectionString)
+      : createNodeAdapter(connectionString, options.migrationConnectionString);
 
-  return {
-    anonTx: (fn) => adapter.withAnonTx(fn),
-    userTx: (user, fn) => adapter.withUserTx(user, fn),
-    ensureReady({ migrations, seeds = [], autoApply = true }: EnsureReadyOptions) {
-      const opts: AdapterSetupOptions = {
-        autoApply,
-        connectionKey: connectionString,
-        migrations,
-        seeds,
-      };
-      return adapter.runSetup(opts);
-    },
+  const anonSQL = createSingleQuerySql((operation) =>
+    adapter.withAnonTx(operation),
+  );
+
+  const database: Database = {
+    anonSQL,
+    userSQL: (user) =>
+      createSingleQuerySql((operation) => adapter.withUserTx(user, operation)),
+    anonTransaction: (operation) => adapter.withAnonTx(operation),
+    userTransaction: (user, operation) => adapter.withUserTx(user, operation),
   };
+  databaseSetups.set(database, (migrations) => {
+    const setupOptions: AdapterSetupOptions = {
+      mode: options.environment === "production" ? "check" : "apply",
+      connectionKey: connectionString,
+      migrations,
+    };
+    return adapter.runSetup(setupOptions);
+  });
+  return database;
 }
 
-/**
- * Convenience tagged-template functions for single-query use.
- * Each call opens and commits its own transaction.
- * Use createDb().anonTx / createDb().userTx when you need atomicity across queries.
- */
-export function makeAnonSql(db: DbClient): DbSql {
-  return ((template: TemplateStringsArray, ...params: unknown[]) =>
-    db.anonTx((sql) => (sql as unknown as (t: TemplateStringsArray, ...p: unknown[]) => Promise<unknown[]>)(template, ...params))
-  ) as unknown as DbSql;
-}
-
-export function makeUserSql(db: DbClient, user: UserCtx): DbSql {
-  return ((template: TemplateStringsArray, ...params: unknown[]) =>
-    db.userTx(user, (sql) => (sql as unknown as (t: TemplateStringsArray, ...p: unknown[]) => Promise<unknown[]>)(template, ...params))
-  ) as unknown as DbSql;
+export function runDatabaseStartup(
+  database: Database,
+  migrations: readonly MigrationAsset[],
+): Promise<void> {
+  const setup = databaseSetups.get(database);
+  if (!setup) {
+    throw new Error("[db] Database was not created by createDatabase().");
+  }
+  return setup(migrations);
 }

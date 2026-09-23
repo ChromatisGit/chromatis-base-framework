@@ -1,9 +1,9 @@
-import { type ReactNode } from "react"
-import { cn } from "../primitives/cn"
+import { type ReactNode } from "react";
+import { cn } from "../primitives/cn";
 
 interface BottomActionBarProps {
-  children: ReactNode
-  className?: string
+  children: ReactNode;
+  className?: string;
 }
 
 export function BottomActionBar({ children, className }: BottomActionBarProps) {
@@ -19,5 +19,5 @@ export function BottomActionBar({ children, className }: BottomActionBarProps) {
     >
       {children}
     </div>
-  )
+  );
 }

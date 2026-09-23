@@ -8,7 +8,9 @@ export interface ViteConfigOptions {
   plugins?: UserConfig["plugins"];
 }
 
-export async function createViteConfig(options: ViteConfigOptions = {}): Promise<UserConfig> {
+export async function createViteConfig(
+  options: ViteConfigOptions = {},
+): Promise<UserConfig> {
   const { tailwind = true, cloudflare = true, plugins = [] } = options;
   const isCloudflare = Boolean(process.env.WRANGLER) && cloudflare;
 
@@ -19,7 +21,10 @@ export async function createViteConfig(options: ViteConfigOptions = {}): Promise
     corePlugins.push(tailwindcss());
   }
 
-  corePlugins.push(reactRouter(), tsconfigPaths({ projects: ["./tsconfig.json"] }));
+  corePlugins.push(
+    reactRouter(),
+    tsconfigPaths({ projects: ["./tsconfig.json"] }),
+  );
 
   if (isCloudflare) {
     const { cloudflare: cfPlugin } = await import("@cloudflare/vite-plugin");
@@ -31,28 +36,5 @@ export async function createViteConfig(options: ViteConfigOptions = {}): Promise
       dedupe: ["react", "react-dom", "react-router", "lucide-react"],
     },
     plugins: [...corePlugins, ...plugins],
-
-    // The SQLite Worker dynamically imports @sqlite.org/sqlite-wasm, which forces
-    // code-splitting for the worker bundle. Rollup's default worker.format ("iife")
-    // doesn't support code-splitting, so it must be "es".
-    worker: {
-      format: "es",
-    },
-
-    // Prevent Vite from trying to pre-bundle the SQLite WASM package.
-    // It ships its own ES module that must be loaded as-is by the browser.
-    optimizeDeps: {
-      exclude: ["@sqlite.org/sqlite-wasm"],
-    },
-
-    // SharedWorker scripts need the correct MIME type headers.
-    // OPFS SAH pool does not require COOP/COEP, but the standard OPFS VFS
-    // does. Add these headers to support both fallback paths in dev.
-    server: {
-      headers: {
-        "Cross-Origin-Opener-Policy": "same-origin",
-        "Cross-Origin-Embedder-Policy": "require-corp",
-      },
-    },
   });
 }

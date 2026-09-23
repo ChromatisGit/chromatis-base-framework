@@ -2,7 +2,12 @@ import type { HTMLAttributes } from "react";
 
 import { cn } from "./cn.js";
 
-type BadgeVariant = "secondary" | "outline" | "accent" | "success" | "destructive";
+type BadgeVariant =
+  | "secondary"
+  | "outline"
+  | "accent"
+  | "success"
+  | "destructive";
 
 const variantClasses: Record<BadgeVariant, string> = {
   secondary: "bg-secondary text-secondary-foreground",

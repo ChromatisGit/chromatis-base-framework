@@ -1,17 +1,17 @@
-import type { ReactNode } from "react"
-import { Switch } from "../primitives/Switch"
-import { useFormContext } from "./formContext"
-import { cn } from "../primitives/cn"
+import type { ReactNode } from "react";
+import { Switch } from "../primitives/Switch";
+import { useFormContext } from "./formContext";
+import { cn } from "../primitives/cn";
 
 interface SwitchFieldProps {
-  label: string
-  description?: string
-  name?: string
-  checked: boolean
-  onChange: (checked: boolean) => void
-  disabled?: boolean
-  action?: ReactNode
-  className?: string
+  label: string;
+  description?: string;
+  name?: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+  action?: ReactNode;
+  className?: string;
 }
 
 export function SwitchField({
@@ -24,13 +24,20 @@ export function SwitchField({
   action,
   className,
 }: SwitchFieldProps) {
-  const { isPending } = useFormContext()
-  const isDisabled = isPending || disabled
+  const { isPending } = useFormContext();
+  const isDisabled = isPending || disabled;
 
   return (
-    <div className={cn("flex items-center justify-between gap-4 py-3 px-1", className)}>
+    <div
+      className={cn(
+        "flex items-center justify-between gap-4 py-3 px-1",
+        className,
+      )}
+    >
       <div className="flex flex-col gap-0.5 min-w-0">
-        <span className="text-sm font-medium text-foreground leading-snug">{label}</span>
+        <span className="text-sm font-medium text-foreground leading-snug">
+          {label}
+        </span>
         {description && (
           <span className="text-xs text-muted-foreground">{description}</span>
         )}
@@ -45,5 +52,5 @@ export function SwitchField({
         />
       </div>
     </div>
-  )
+  );
 }

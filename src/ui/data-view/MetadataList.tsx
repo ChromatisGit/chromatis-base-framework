@@ -1,18 +1,22 @@
-import { type ReactNode } from "react"
-import { cn } from "../primitives/cn"
+import { type ReactNode } from "react";
+import { cn } from "../primitives/cn";
 
 interface MetadataItem {
-  label: string
-  value: ReactNode
+  label: string;
+  value: ReactNode;
 }
 
 interface MetadataListProps {
-  items: MetadataItem[]
-  columns?: 1 | 2
-  className?: string
+  items: MetadataItem[];
+  columns?: 1 | 2;
+  className?: string;
 }
 
-export function MetadataList({ items, columns = 1, className }: MetadataListProps) {
+export function MetadataList({
+  items,
+  columns = 1,
+  className,
+}: MetadataListProps) {
   return (
     <dl
       className={cn(
@@ -30,5 +34,5 @@ export function MetadataList({ items, columns = 1, className }: MetadataListProp
         </div>
       ))}
     </dl>
-  )
+  );
 }
