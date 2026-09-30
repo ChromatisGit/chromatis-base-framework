@@ -219,16 +219,14 @@
 @media (min-width: 768px) {
   .shell {
     display: grid;
+    /* Reserve the same column in both states so the page never shifts. */
     grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-  }
-  .shell--collapsed {
-    /* The rail: toggle button + padding on both sides + the 1px border */
-    grid-template-columns: var(--sidebar-rail-width) minmax(0, 1fr);
   }
   .shell__sidebar {
     display: block;
     position: sticky;
     top: env(safe-area-inset-top, 0px);
+    width: var(--sidebar-width);
     /* Ends at the bottom of the window: while the masthead is still in
        view, the sidebar is shorter by the part of the masthead that shows
        (--shell-top, set on scroll), so its last item can always be reached */
@@ -242,6 +240,13 @@
     padding: var(--space-300) var(--space-300) var(--space-900)
       max(var(--space-300), env(safe-area-inset-left, 0px));
     border-right: var(--border-1) solid var(--color-border-subtle);
+    transition: width var(--motion-default) var(--ease-standard);
+  }
+  .shell--collapsed .shell__sidebar {
+    width: var(--sidebar-rail-width);
+  }
+  .shell__sidebar .section-nav {
+    width: calc(var(--sidebar-width) - 2 * var(--space-300) - var(--border-1));
   }
   .shell__main {
     padding-bottom: 0;
@@ -377,6 +382,37 @@
   align-items: center;
   gap: var(--space-300);
   min-width: 0;
+}
+.section-nav__icon {
+  display: inline-flex;
+  flex: none;
+}
+.section-nav__icon .icon {
+  width: var(--size-icon-lg);
+  height: var(--size-icon-lg);
+}
+.section-nav__initial {
+  display: none;
+}
+.section-nav__link-label,
+.section-nav__link .badge {
+  transition: opacity var(--motion-default) var(--ease-standard);
+}
+.shell--collapsed .section-nav__initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--size-icon-lg);
+  height: var(--size-icon-lg);
+  font-weight: var(--weight-bold);
+}
+.shell--collapsed .section-nav__link-label,
+.shell--collapsed .section-nav__link .badge {
+  opacity: 0;
+}
+.shell--collapsed .section-nav__expand,
+.shell--collapsed .section-nav__pages {
+  display: none;
 }
 /* A label never disappears under the count: it wraps, hyphenating long words if it must */
 .section-nav__link span {

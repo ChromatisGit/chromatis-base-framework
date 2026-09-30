@@ -103,7 +103,7 @@ hr {
   width: var(--size-icon-md);
   height: var(--size-icon-md);
   flex: none;
-  fill: currentColor;
+  fill: none;
   vertical-align: middle;
 }
 .icon--sm {

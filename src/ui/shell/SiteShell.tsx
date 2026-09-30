@@ -79,6 +79,7 @@ function NavigationTree({
   pagesIn,
   expandIcon,
   onNavigate,
+  compact = false,
 }: {
   items: readonly NavigationItem[];
   path: string;
@@ -87,6 +88,7 @@ function NavigationTree({
   pagesIn: ShellLabels["pagesIn"];
   expandIcon: ReactNode;
   onNavigate?: () => void;
+  compact?: boolean;
 }) {
   const prefix = useId();
   const selected = parentPath ?? path;
@@ -147,11 +149,21 @@ function NavigationTree({
                 aria-current={
                   current ? "page" : parentCurrent ? "true" : undefined
                 }
+                aria-label={compact ? item.label : undefined}
+                title={compact ? item.label : undefined}
                 onClick={onNavigate}
               >
                 <span className="section-nav__text">
-                  {item.icon}
-                  <span>{item.label}</span>
+                  {item.icon ? (
+                    <span className="section-nav__icon" aria-hidden="true">
+                      {item.icon}
+                    </span>
+                  ) : (
+                    <span className="section-nav__initial" aria-hidden="true">
+                      {item.label.charAt(0)}
+                    </span>
+                  )}
+                  <span className="section-nav__link-label">{item.label}</span>
                 </span>
                 {item.badge && (
                   <span className="badge badge--count">{item.badge}</span>
@@ -399,7 +411,7 @@ export function SiteShell({
               {sidebarOpen ? labels.hideSidebar : labels.showSidebar}
             </span>
           </button>
-          <div id={sidebarId} hidden={!sidebarOpen}>
+          <div id={sidebarId}>
             <NavigationTree
               items={navigation}
               path={path}
@@ -407,6 +419,7 @@ export function SiteShell({
               label={labels.navigation}
               pagesIn={labels.pagesIn}
               expandIcon={icons.expand}
+              compact={!sidebarOpen}
             />
           </div>
         </aside>
