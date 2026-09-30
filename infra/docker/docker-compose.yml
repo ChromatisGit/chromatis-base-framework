@@ -1,4 +1,4 @@
-# DB credentials are derived from CONFIG.yaml (local.database) by infra/scripts/dbDocker.ts.
+# DB credentials are supplied through environment secrets by infra/scripts/dbDocker.ts.
 #
 services:
   db:

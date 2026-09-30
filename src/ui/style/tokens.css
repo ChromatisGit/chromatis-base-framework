@@ -1,0 +1,278 @@
+/* =====================================================================
+   CORE TOKENS — project independent, grouped by purpose
+   ---------------------------------------------------------------------
+   Foundation   scales every part of the system draws from: type,
+                spacing, radius, borders, motion, layout, layers
+   Interaction  what makes things usable: minimum target, focus ring
+   Component    sizes fixed per component: button, field, choice, icon
+   Shell        application-shell geometry: header, sidebar, bottom nav.
+                Configurable per project (override in a project or theme
+                file); components never read shell tokens.
+   Sizes are rem (1rem = 16px), so text enlargement and zoom scale the
+   whole system; px values in comments match the UI Design Guide.
+   Themes never change this file. They provide the brand primitives
+   consumed by the "derived semantic colors" block at the end.
+   ===================================================================== */
+
+:root {
+  /* =================== FOUNDATION ================================== */
+  /* ---- Type scale (§5) -------------------------------------------- */
+  --text-xs: 0.75rem; /* 12 */
+  --text-sm: 0.875rem; /* 14 */
+  --text-md: 1rem; /* 16 */
+  --text-lg: 1.25rem; /* 20 */
+  --text-xl: 1.5rem; /* 24 */
+  --text-2xl: 1.75rem; /* 28 */
+  --text-3xl: 2rem; /* 32 */
+  --text-4xl: 2.5rem; /* 40 */
+  --text-5xl: 3rem; /* 48 */
+  --text-6xl: 4rem; /* 64 */
+  --text-7xl: 5rem; /* 80 */
+
+  --leading-body: 1.5;
+  --leading-label: 1.3;
+  --leading-heading: 1.2;
+  --leading-display: 1.2; /* display type (.display) */
+  --leading-display-tight: 1.1; /* optional editorial variant (.display--tight) */
+  --weight-regular: 400;
+  --weight-bold: 700;
+  --measure: 70ch;
+
+  /* ---- Spacing (§6) ----------------------------------------------- */
+  --space-0: 0;
+  --space-50: 0.125rem; /* 2 */
+  --space-100: 0.25rem; /* 4 */
+  --space-200: 0.5rem; /* 8 */
+  --space-300: 0.75rem; /* 12 */
+  --space-400: 1rem; /* 16 */
+  --space-500: 1.25rem; /* 20 */
+  --space-600: 1.5rem; /* 24 */
+  --space-700: 2rem; /* 32 */
+  --space-800: 2.5rem; /* 40 */
+  --space-900: 3rem; /* 48 */
+  --space-1000: 4rem; /* 64 */
+  --space-1100: 5rem; /* 80 */
+  --space-1200: 7.5rem; /* 120 */
+  --space-1300: 10rem; /* 160 */
+  --space-1400: 12.5rem; /* 200 */
+
+  /* ---- Radius and borders (§7) ------------------------------------ */
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-round: 50%;
+  /* Radius roles. A theme may change how often radius shows, not the scale.
+     Controls = buttons, fields, badges. Surfaces = cards, panels, alerts,
+     media. Overlays = dialogs, dropdowns. */
+  --radius-control: var(--radius-sm);
+  --radius-surface: var(--radius-md);
+  --radius-surface-lg: var(--radius-lg);
+  --radius-overlay: var(--radius-lg);
+  --border-1: 1px;
+  --border-2: 2px;
+  --border-3: 3px;
+  --border-4: 4px;
+
+  /* ---- Layout (§10) ----------------------------------------------- */
+  --container-reading: 45rem; /* 720 */
+  --container-content: 65rem; /* 1040 */
+  --container-wide: 80rem; /* 1280 */
+  --page-gutter: var(--space-400);
+  --grid-columns: 4;
+  --grid-gutter: var(--space-400);
+  /* Breakpoints (documentation only — custom properties cannot be used
+     inside media queries; the literal values below mirror these). */
+  --breakpoint-sm: 480px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1440px;
+
+  /* ---- Motion (§32) ----------------------------------------------- */
+  --motion-fast: 100ms;
+  --motion-default: 200ms;
+  --motion-slow: 300ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ---- Layers ----------------------------------------------------- */
+  --z-header: 100;
+  --z-dropdown: 200;
+
+  /* =================== INTERACTION ================================= */
+  --target-min: 2.75rem; /* 44 — every interactive target, at least 44×44 */
+  --focus-width: var(--border-2); /* 2px solid var(--color-border-focus) */
+  --focus-offset: 2px; /* default: the ring sits outside the element */
+  --focus-offset-inset: -2px; /* contained items (tabs, navigation rows) */
+
+  /* =================== COMPONENT =================================== */
+  --button-height-sm: 2.25rem; /* 36 — dense secondary contexts only */
+  --button-height-md: 2.75rem; /* 44 — default */
+  --button-height-lg: 3.25rem; /* 52 */
+  --field-height: 3rem; /* 48 — inputs, selects */
+  --choice-size: 1.25rem; /* 20 — checkbox and radio box; the row stays 44 */
+  --size-icon-sm: 1rem; /* 16 */
+  --size-icon-md: 1.25rem; /* 20 */
+  --size-icon-lg: 1.5rem; /* 24 */
+  --size-icon-xl: 2rem; /* 32 */
+
+  /* =================== SHELL (configurable per project) ============ */
+  --header-height: 4rem; /* masthead brand bar: 64 mobile, 80 desktop */
+  --nav-bar-height: 3.5rem; /* 56 horizontal navigation layer (when used) */
+  --header-height-sticky: var(
+    --header-height
+  ); /* what stays visible when scrolled */
+  --bottom-nav-height: 3.5rem; /* 56 bottom navigation on phones; 0 when disabled */
+  --sidebar-width: 16.5rem; /* 264 navigation sidebar from 768 */
+  --sidebar-rail-width: calc(
+    var(--target-min) + 2 * var(--space-300) + var(--border-1)
+  ); /* closed sidebar */
+}
+
+@media (min-width: 768px) {
+  :root {
+    --page-gutter: var(--space-500);
+    --grid-columns: 8;
+    --grid-gutter: var(--space-500);
+  }
+}
+@media (min-width: 1024px) {
+  :root {
+    --sidebar-width: 17.5rem; /* 280 */
+    --page-gutter: var(--space-600);
+    --grid-columns: 12;
+    --grid-gutter: var(--space-600);
+  }
+  /* Desktop header height only at normal text size — see shell.css */
+  :root:not([data-text-size="150"]):not([data-text-size="200"]) {
+    --header-height: 5rem;
+    --header-height-sticky: var(--nav-bar-height);
+  }
+}
+@media (min-width: 1280px) {
+  :root {
+    --page-gutter: var(--space-700);
+  }
+}
+
+/* Reduced motion is handled at token level, so every component that
+   uses the motion tokens respects it automatically. data-motion="reduce"
+   lets the test pages simulate the preference. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0ms;
+    --motion-default: 0ms;
+    --motion-slow: 0ms;
+  }
+}
+:root[data-motion="reduce"] {
+  --motion-fast: 0ms;
+  --motion-default: 0ms;
+  --motion-slow: 0ms;
+}
+
+/* =====================================================================
+   DERIVED SEMANTIC COLORS
+   ---------------------------------------------------------------------
+   Calculated from the theme primitives (--color-text, --color-bg,
+   --color-status-*). Declared on every surface so that a surface which
+   swaps text/background (e.g. .surface-emphasis) gets correctly
+   recalculated borders, muted text and state colors.
+   A theme tunes them through the --mix-* amounts (plain percentages, so
+   they inherit safely into remapped surfaces). Keep a visible hierarchy:
+   muted text clearly quieter than body text (≥ 4.5:1), subtle borders for
+   structural grouping, control borders strong enough for 3:1.
+   ===================================================================== */
+:root {
+  --mix-text-muted: 70%;
+  --mix-border-subtle: 20%;
+  --mix-border-control: 55%;
+}
+:root,
+.surface-emphasis,
+.surface-accent,
+[data-surface="accent"],
+.surface-brand {
+  --color-text-muted: color-mix(
+    in srgb,
+    var(--color-text) var(--mix-text-muted),
+    var(--color-bg)
+  );
+  --color-text-placeholder: color-mix(
+    in srgb,
+    var(--color-text) 70%,
+    var(--color-bg)
+  );
+  --color-border-subtle: color-mix(
+    in srgb,
+    var(--color-text) var(--mix-border-subtle),
+    var(--color-bg)
+  );
+  --color-border-control: color-mix(
+    in srgb,
+    var(--color-text) var(--mix-border-control),
+    var(--color-bg)
+  );
+  --color-border-strong: var(--color-text);
+  --color-border-emphasis: var(
+    --color-text
+  ); /* hover/selected outline of surfaces */
+  --color-bg-hover: color-mix(in srgb, var(--color-text) 7%, var(--color-bg));
+  --color-bg-pressed: color-mix(
+    in srgb,
+    var(--color-text) 13%,
+    var(--color-bg)
+  );
+
+  --color-disabled-bg: color-mix(
+    in srgb,
+    var(--color-text) 9%,
+    var(--color-bg)
+  );
+  --color-disabled-fg: color-mix(
+    in srgb,
+    var(--color-text) 50%,
+    var(--color-bg)
+  );
+  --color-disabled-border: color-mix(
+    in srgb,
+    var(--color-text) 20%,
+    var(--color-bg)
+  );
+
+  /* Functional colors. A theme gives each role a strong value
+     (--color-status-*: text, icons, borders — must reach 4.5:1) and may add a
+     light value (--color-status-*-light) as the basis of the tinted
+     background. Warning and error stay separate roles even where a theme
+     maps them to the same pair. */
+  --color-status-info-bg: color-mix(
+    in srgb,
+    var(--color-status-info-light, var(--color-status-info))
+      var(--mix-status-bg, 9%),
+    var(--color-bg)
+  );
+  --color-status-success-bg: color-mix(
+    in srgb,
+    var(--color-status-success-light, var(--color-status-success))
+      var(--mix-status-bg, 9%),
+    var(--color-bg)
+  );
+  --color-status-warning-bg: color-mix(
+    in srgb,
+    var(--color-status-warning-light, var(--color-status-warning))
+      var(--mix-status-bg, 11%),
+    var(--color-bg)
+  );
+  --color-status-error-bg: color-mix(
+    in srgb,
+    var(--color-status-error-light, var(--color-status-error))
+      var(--mix-status-bg, 9%),
+    var(--color-bg)
+  );
+
+  --color-skeleton: color-mix(in srgb, var(--color-text) 10%, var(--color-bg));
+  --color-skeleton-highlight: color-mix(
+    in srgb,
+    var(--color-text) 4%,
+    var(--color-bg)
+  );
+}

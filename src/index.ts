@@ -1,93 +1,87 @@
-// Shell — page structure
-export { Layout } from "./ui/shell/Layout"
-export { Sidebar } from "./ui/shell/Sidebar"
-export type { SidebarBrand } from "./ui/shell/Sidebar"
-export { Page } from "./ui/shell/Page"
-export { PageHeader } from "./ui/shell/PageHeader"
-export { Section } from "./ui/shell/Section"
-export { MobileBottomNav } from "./ui/shell/MobileBottomNav"
-export { MobileMenu } from "./ui/shell/MobileMenu"
-export { NavigationDrawer } from "./ui/shell/NavigationDrawer"
-export { NavigationContext, useNavigation } from "./ui/shell/navContext"
-export { toggleTheme, isActiveRoute } from "./ui/shell/navItems"
-export type { NavItem } from "./ui/shell/navItems"
-
-// Layouts — all responsive behavior
-export { Stack } from "./ui/layouts/Stack"
-export { Inline } from "./ui/layouts/Inline"
-export { ListDetail } from "./ui/layouts/ListDetail"
-export { PanelLayout } from "./ui/layouts/PanelLayout"
-export { ResponsiveColumns } from "./ui/layouts/ResponsiveColumns"
-export { ContentLayout } from "./ui/layouts/ContentLayout"
-export { CenteredLayout } from "./ui/layouts/CenteredLayout"
-export { SwipeTabs } from "./ui/layouts/SwipeTabs"
-
-// Primitives
-export { Button } from "./ui/primitives/Button"
-export { Card } from "./ui/primitives/Card"
-export { Badge } from "./ui/primitives/Badge"
+export { Button } from "./ui/primitives/Button";
+export type {
+  ButtonProps,
+  ButtonRole,
+  ButtonSize,
+} from "./ui/primitives/Button";
+export { ActionLink, TextLink } from "./ui/primitives/Link";
+export type { ActionLinkProps, TextLinkProps } from "./ui/primitives/Link";
+export { IconButton } from "./ui/primitives/IconButton";
+export type { IconButtonProps } from "./ui/primitives/IconButton";
 export {
-  Sheet,
-  SheetTrigger,
-  SheetClose,
-  SheetContent,
-  SheetHeader,
-  SheetFooter,
-  SheetTitle,
-  SheetDescription,
-} from "./ui/primitives/Sheet"
-export { EmptyState } from "./ui/primitives/EmptyState"
-export { Input } from "./ui/primitives/Input"
-export { Switch } from "./ui/primitives/Switch"
-export { Checkbox } from "./ui/primitives/Checkbox"
-export { Select } from "./ui/primitives/Select"
+  Card,
+  CardBody,
+  CardLink,
+  CardMedia,
+  CardValue,
+  CardLabel,
+} from "./ui/primitives/Card";
+export type { CardProps } from "./ui/primitives/Card";
+export { Badge } from "./ui/primitives/Badge";
+export type { BadgeProps } from "./ui/primitives/Badge";
+export { Alert } from "./ui/primitives/Alert";
+export type { AlertProps } from "./ui/primitives/Alert";
+export { Input } from "./ui/primitives/Input";
+export type { InputProps } from "./ui/primitives/Input";
+export { Select } from "./ui/primitives/Select";
+export type { SelectProps, SelectOption } from "./ui/primitives/Select";
+export { Form } from "./ui/forms/Form";
+export { TextField } from "./ui/forms/TextField";
+export { TextAreaField } from "./ui/forms/TextAreaField";
+export type { TextAreaFieldProps } from "./ui/forms/TextAreaField";
+export { SelectField } from "./ui/forms/SelectField";
+export { Page } from "./ui/shell/Page";
+export type { PageProps } from "./ui/shell/Page";
+export { colorModeInitScript, useColorMode } from "./ui/theme/colorMode";
+export type { ColorMode } from "./ui/theme/colorMode";
+export { SiteShell } from "./ui/shell/SiteShell";
+export type {
+  SiteShellProps,
+  NavigationItem,
+  ShellLabels,
+  ShellIcons,
+  ShellActionSlot,
+} from "./ui/shell/SiteShell";
 export {
-  Dialog,
-  DialogTrigger,
-  DialogClose,
-  DialogContent,
-  DialogHeader,
-  DialogFooter,
-  DialogTitle,
-  DialogDescription,
-  DialogBody,
-} from "./ui/primitives/Dialog"
+  Breadcrumbs,
+  PageHeader,
+  Facts,
+  ServiceAction,
+  ServiceContent,
+  EditorialArticle,
+} from "./ui/shell/PageCompositions";
+export type {
+  BreadcrumbItem,
+  BreadcrumbsProps,
+  PageHeaderProps,
+  Fact,
+  ServiceActionProps,
+  ServiceSection,
+  ServiceContentProps,
+  EditorialArticleProps,
+} from "./ui/shell/PageCompositions";
+export { Tabs } from "./ui/primitives/Tabs";
+export type { TabsProps, TabItem } from "./ui/primitives/Tabs";
+export { Accordion } from "./ui/primitives/Accordion";
+export type { AccordionProps, AccordionItem } from "./ui/primitives/Accordion";
+export { Dialog } from "./ui/primitives/Dialog";
+export type { DialogProps } from "./ui/primitives/Dialog";
+export { Pagination, paginationModel } from "./ui/primitives/Pagination";
+export type { PaginationProps } from "./ui/primitives/Pagination";
 export {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "./ui/primitives/Tabs"
-export { Toaster, toast } from "./ui/primitives/Toast"
-
-// Forms
-export { Form } from "./ui/forms/Form"
-export { FormSection } from "./ui/forms/FormSection"
-export { TextField } from "./ui/forms/TextField"
-export { TextAreaField } from "./ui/forms/TextAreaField"
-export { SelectField } from "./ui/forms/SelectField"
-export { SwitchField } from "./ui/forms/SwitchField"
-export { CheckboxField } from "./ui/forms/CheckboxField"
-export { FormActions } from "./ui/forms/FormActions"
-
-// Data view
-export { StateView } from "./ui/data-view/StateView"
-export { DataList } from "./ui/data-view/DataList"
-export { DataListItem } from "./ui/data-view/DataListItem"
-export { DataGrid } from "./ui/data-view/DataGrid"
-export { MetadataList } from "./ui/data-view/MetadataList"
-
-// Auth UI
-export { LoginForm } from "./ui/auth/LoginForm"
-export { RegisterForm } from "./ui/auth/RegisterForm"
-
-// Routing
-export { defineRouteAction } from "./routing/defineRouteAction"
-
-// Interaction
-export { ActionSurface } from "./ui/interaction/ActionSurface"
-export { ActionBar } from "./ui/interaction/ActionBar"
-export { BottomActionBar } from "./ui/interaction/BottomActionBar"
-export { ConfirmAction } from "./ui/interaction/ConfirmAction"
-export { SheetOrPopover } from "./ui/interaction/SheetOrPopover"
-
+  DataTable,
+  RecordList,
+  RecordListItem,
+  RecordTitle,
+  RecordMeta,
+  RecordStatus,
+} from "./ui/primitives/DataView";
+export type { DataTableProps } from "./ui/primitives/DataView";
+export { Spinner, Skeleton, Progress } from "./ui/primitives/Loading";
+export type {
+  SpinnerProps,
+  SkeletonProps,
+  ProgressProps,
+} from "./ui/primitives/Loading";
+export { EmptyState } from "./ui/primitives/EmptyState";
+export type { EmptyStateProps } from "./ui/primitives/EmptyState";

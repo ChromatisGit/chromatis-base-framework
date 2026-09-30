@@ -1,41 +1,40 @@
 import { hashPin, verifyPin } from "./hash.server.js";
 import type { DbSql } from "../db/types.js";
-import type { UserDTO, UserRole, LoginResult, RegisterResult } from "./types.js";
+import type { LoginResult, RegisterResult, User } from "./types.js";
 
-type UserRow = {
+type CredentialRow = Readonly<{
   id: string;
-  role: UserRole;
   pin_hash: string;
   enabled: boolean;
-};
-
-export async function hasAnyUsers(sql: DbSql): Promise<boolean> {
-  const rows = await sql<[{ exists: boolean }]>`
-    SELECT EXISTS (SELECT 1 FROM users LIMIT 1) AS exists
-  `;
-  return rows[0]?.exists ?? false;
-}
+}>;
 
 export async function registerUser(
   sql: DbSql,
-  { username, pin, role }: { username: string; pin: string; role?: UserRole },
+  credentials: Readonly<{ username: string; pin: string }>,
 ): Promise<RegisterResult> {
-  const isFirst = !(await hasAnyUsers(sql));
-  const pinHash = await hashPin(pin);
-  const resolvedRole: UserRole = role ?? "user";
-
-  const rows = await sql<[{ id: string; role: UserRole; enabled: boolean }]>`
-    INSERT INTO users (username, pin_hash, role, enabled)
-    VALUES (${username}, ${pinHash}, ${resolvedRole}, ${isFirst})
-    ON CONFLICT (username) DO NOTHING
-    RETURNING id, role, enabled
+  const [{ exists = false } = {}] = await sql<Array<{ exists: boolean }>>`
+    SELECT EXISTS (SELECT 1 FROM users LIMIT 1) AS exists
   `;
-
+  const pinHash = await hashPin(credentials.pin);
+  const rows = await sql<Array<{ id: string; enabled: boolean }>>`
+    INSERT INTO users (username, pin_hash, enabled)
+    VALUES (${credentials.username}, ${pinHash}, ${!exists})
+    ON CONFLICT (username) DO NOTHING
+    RETURNING id, enabled
+  `;
   const row = rows[0];
-  if (!row) return { status: "username_taken" };
+  if (!row) {
+    return { status: "username_taken" };
+  }
 
-  const user: UserDTO = { id: row.id, role: row.role };
-  return row.enabled ? { status: "registered", user } : { status: "pending_approval" };
+  if (!exists) {
+    await sql`INSERT INTO roles (key, description) VALUES ('admin', 'Application administrator') ON CONFLICT DO NOTHING`;
+    await sql`INSERT INTO user_roles (user_id, role_key) VALUES (${row.id}, 'admin') ON CONFLICT DO NOTHING`;
+  }
+
+  return row.enabled
+    ? { status: "registered", user: { id: row.id } }
+    : { status: "pending_approval" };
 }
 
 export async function loginUser(
@@ -43,63 +42,32 @@ export async function loginUser(
   username: string,
   pin: string,
 ): Promise<LoginResult> {
-  const rows = await sql<UserRow[]>`
-    SELECT id, role, pin_hash, enabled FROM users WHERE username = ${username} LIMIT 1
+  const rows = await sql<CredentialRow[]>`
+    SELECT id, pin_hash, enabled FROM users WHERE username = ${username} LIMIT 1
   `;
   const row = rows[0];
-  if (!row) return { status: "invalid_credentials" };
-  if (!row.enabled) return { status: "disabled" };
-
-  const ok = await verifyPin(pin, row.pin_hash);
-  if (!ok) return { status: "invalid_credentials" };
-
-  return { status: "ok", user: { id: row.id, role: row.role } };
+  if (!row || !(await verifyPin(pin, row.pin_hash))) {
+    return { status: "invalid_credentials" };
+  }
+  return row.enabled
+    ? { status: "ok", user: { id: row.id } }
+    : { status: "disabled" };
 }
 
-export async function getUserById(sql: DbSql, id: string): Promise<UserDTO | null> {
-  const rows = await sql<[{ id: string; role: UserRole; enabled: boolean }]>`
-    SELECT id, role, enabled FROM users WHERE id = ${id} LIMIT 1
-  `;
-  const row = rows[0];
-  if (!row || !row.enabled) return null;
-  return { id: row.id, role: row.role };
-}
-
-export async function getUserByUsername(
+export async function getUserById(
   sql: DbSql,
-  username: string,
-): Promise<(UserDTO & { enabled: boolean }) | null> {
-  const rows = await sql<[{ id: string; role: UserRole; enabled: boolean }]>`
-    SELECT id, role, enabled FROM users WHERE username = ${username} LIMIT 1
+  id: string,
+): Promise<User | null> {
+  const rows = await sql<Array<{ id: string }>>`
+    SELECT id FROM users WHERE id = ${id} AND enabled = true LIMIT 1
   `;
-  const row = rows[0];
-  if (!row) return null;
-  return { id: row.id, role: row.role, enabled: row.enabled };
+  return rows[0] ? { id: rows[0].id } : null;
 }
 
-export async function enableUser(sql: DbSql, userId: string): Promise<void> {
-  await sql`UPDATE users SET enabled = TRUE WHERE id = ${userId}`;
-}
-
-export async function disableUser(sql: DbSql, userId: string): Promise<void> {
-  await sql`UPDATE users SET enabled = FALSE WHERE id = ${userId}`;
-}
-
-export async function setUserRole(sql: DbSql, userId: string, role: UserRole): Promise<void> {
-  await sql`UPDATE users SET role = ${role} WHERE id = ${userId}`;
-}
-
-export async function listUsers(
+export async function setUserEnabled(
   sql: DbSql,
-): Promise<Array<UserDTO & { username: string; enabled: boolean; createdAt: Date }>> {
-  const rows = await sql<
-    Array<{ id: string; role: UserRole; username: string; enabled: boolean; created_at: Date }>
-  >`SELECT id, role, username, enabled, created_at FROM users ORDER BY created_at ASC`;
-  return rows.map((r) => ({
-    id: r.id,
-    role: r.role,
-    username: r.username,
-    enabled: r.enabled,
-    createdAt: r.created_at,
-  }));
+  userId: string,
+  enabled: boolean,
+): Promise<void> {
+  await sql`UPDATE users SET enabled = ${enabled} WHERE id = ${userId}`;
 }

@@ -1,87 +1,109 @@
-import * as React from "react"
-import { cn } from "./cn"
+import { useId, useState, type KeyboardEvent, type ReactNode } from "react";
+import { cn } from "./cn.js";
 
-interface TabsContextValue {
-  value: string
-  onChange: (value: string) => void
+export interface TabItem {
+  id: string;
+  label: ReactNode;
+  content: ReactNode;
 }
 
-const TabsContext = React.createContext<TabsContextValue | null>(null)
-
-function useTabsContext() {
-  const ctx = React.useContext(TabsContext)
-  if (!ctx) throw new Error("Tabs components must be used within <Tabs>.")
-  return ctx
+export interface TabsProps {
+  label: string;
+  items: readonly TabItem[];
+  value?: string;
+  defaultValue?: string;
+  onValueChange?: (value: string) => void;
+  className?: string;
 }
 
-interface TabsProps {
-  value: string
-  onChange: (value: string) => void
-  children: React.ReactNode
-  className?: string
-}
+export function Tabs({
+  label,
+  items,
+  value,
+  defaultValue,
+  onValueChange,
+  className,
+}: TabsProps) {
+  const id = useId();
+  const [internal, setInternal] = useState(defaultValue ?? items[0]?.id);
+  const selected = items.some((item) => item.id === (value ?? internal))
+    ? (value ?? internal)
+    : items[0]?.id;
 
-export function Tabs({ value, onChange, children, className }: TabsProps) {
-  return (
-    <TabsContext.Provider value={{ value, onChange }}>
-      <div className={cn("flex flex-col", className)}>{children}</div>
-    </TabsContext.Provider>
-  )
-}
+  function select(next: string) {
+    if (value === undefined) {
+      setInternal(next);
+    }
+    if (next !== selected) {
+      onValueChange?.(next);
+    }
+  }
 
-export function TabsList({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div
-      role="tablist"
-      className={cn(
-        "flex items-center gap-1 border-b border-border px-1 overflow-x-auto scrollbar-none",
-        className,
-      )}
-      {...props}
-    />
-  )
-}
-
-interface TabsTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  value: string
-}
-
-export function TabsTrigger({ value, className, children, ...props }: TabsTriggerProps) {
-  const { value: activeValue, onChange } = useTabsContext()
-  const active = value === activeValue
-
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={() => onChange(value)}
-      className={cn(
-        "flex-shrink-0 px-4 py-2.5 -mb-px text-sm font-medium transition-colors border-b-2",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        active
-          ? "border-primary text-primary"
-          : "border-transparent text-muted-foreground hover:text-foreground hover:border-border",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-    </button>
-  )
-}
-
-interface TabsContentProps extends React.HTMLAttributes<HTMLDivElement> {
-  value: string
-}
-
-export function TabsContent({ value, className, children, ...props }: TabsContentProps) {
-  const { value: activeValue } = useTabsContext()
-  if (value !== activeValue) return null
+  function onKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    let next: number;
+    switch (event.key) {
+      case "ArrowRight":
+        next = (index + 1) % items.length;
+        break;
+      case "ArrowLeft":
+        next = (index - 1 + items.length) % items.length;
+        break;
+      case "Home":
+        next = 0;
+        break;
+      case "End":
+        next = items.length - 1;
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    const target =
+      event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+        '[role="tab"]',
+      )[next];
+    const nextItem = items[next];
+    if (!nextItem) {
+      return;
+    }
+    select(nextItem.id);
+    target?.focus();
+    target?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }
 
   return (
-    <div role="tabpanel" className={cn("pt-4", className)} {...props}>
-      {children}
+    <div className={cn("tabs", className)}>
+      <div className="tabs__list" role="tablist" aria-label={label}>
+        {items.map((item, index) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            className="tabs__tab"
+            id={`${id}-tab-${index}`}
+            aria-controls={`${id}-panel-${index}`}
+            aria-selected={selected === item.id}
+            tabIndex={selected === item.id ? 0 : -1}
+            onClick={() => select(item.id)}
+            onKeyDown={(event) => onKeyDown(event, index)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      {items.map((item, index) => (
+        <div
+          key={item.id}
+          className="tabs__panel"
+          role="tabpanel"
+          id={`${id}-panel-${index}`}
+          aria-labelledby={`${id}-tab-${index}`}
+          tabIndex={0}
+          hidden={selected !== item.id}
+        >
+          {item.content}
+        </div>
+      ))}
     </div>
-  )
+  );
 }

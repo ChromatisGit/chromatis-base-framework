@@ -11,21 +11,36 @@ export function getSessionCookie(
   config: Pick<SessionCookieConfig, "name">,
 ): string | null {
   const header = request.headers.get("cookie");
-  if (!header) return null;
+  if (!header) {
+    return null;
+  }
   for (const part of header.split("; ")) {
     const eq = part.indexOf("=");
-    if (eq === -1) continue;
-    if (part.slice(0, eq) === config.name) return part.slice(eq + 1);
+    if (eq === -1) {
+      continue;
+    }
+    if (part.slice(0, eq) === config.name) {
+      try {
+        return decodeURIComponent(part.slice(eq + 1));
+      } catch {
+        return null;
+      }
+    }
   }
   return null;
 }
 
-export function buildSetSessionCookie(value: string, config: SessionCookieConfig): string {
+export function buildSetSessionCookie(
+  value: string,
+  config: SessionCookieConfig,
+): string {
   const maxAge = config.maxAge ?? 60 * 60 * 24 * 30;
   const path = config.path ?? "/";
   const sameSite = config.sameSite ?? "lax";
-  let cookie = `${config.name}=${value}; HttpOnly; Path=${path}; Max-Age=${maxAge}; SameSite=${sameSite}`;
-  if (config.secure) cookie += "; Secure";
+  let cookie = `${config.name}=${encodeURIComponent(value)}; HttpOnly; Path=${path}; Max-Age=${maxAge}; SameSite=${sameSite}`;
+  if (config.secure) {
+    cookie += "; Secure";
+  }
   return cookie;
 }
 
@@ -35,6 +50,8 @@ export function buildClearSessionCookie(
   const path = config.path ?? "/";
   const sameSite = config.sameSite ?? "lax";
   let cookie = `${config.name}=; HttpOnly; Path=${path}; Max-Age=0; SameSite=${sameSite}`;
-  if (config.secure) cookie += "; Secure";
+  if (config.secure) {
+    cookie += "; Secure";
+  }
   return cookie;
 }

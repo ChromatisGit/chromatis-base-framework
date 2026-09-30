@@ -1,4 +1,9 @@
-export type DatabaseSetupPhase = "probe" | "lock" | "migrate" | "seed" | "ready" | "failed";
+export type DatabaseSetupPhase =
+  | "probe"
+  | "lock"
+  | "migrate"
+  | "ready"
+  | "failed";
 
 type DatabaseSetupErrorOptions = {
   message: string;
@@ -21,11 +26,15 @@ export class DatabaseSetupError extends Error {
     this.userMessage = options.userMessage;
     this.phase = options.phase;
     this.context = options.context;
-    if (options.code !== undefined) this.code = options.code;
+    if (options.code !== undefined) {
+      this.code = options.code;
+    }
   }
 }
 
-export function isDatabaseSetupError(error: unknown): error is DatabaseSetupError {
+export function isDatabaseSetupError(
+  error: unknown,
+): error is DatabaseSetupError {
   return error instanceof DatabaseSetupError;
 }
 
@@ -58,18 +67,18 @@ function mapDatabaseSetupMessage(rawMessage: string, code?: string): string {
   }
 
   if (
-    code === "28P01"
-    || code === "28000"
-    || lowerMessage.includes("password authentication failed")
+    code === "28P01" ||
+    code === "28000" ||
+    lowerMessage.includes("password authentication failed")
   ) {
     return "The hosted database connection could not authenticate. Check DATABASE_URL.";
   }
 
   if (
-    lowerMessage.includes("does not exist")
-    || lowerMessage.includes("failed to fetch")
-    || lowerMessage.includes("connect")
-    || lowerMessage.includes("timeout")
+    lowerMessage.includes("does not exist") ||
+    lowerMessage.includes("failed to fetch") ||
+    lowerMessage.includes("connect") ||
+    lowerMessage.includes("timeout")
   ) {
     return "The hosted database could not be reached during automatic setup.";
   }

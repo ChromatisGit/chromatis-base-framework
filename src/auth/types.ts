@@ -1,18 +1,28 @@
-export type UserRole = "admin" | "user";
+export type User = Readonly<{ id: string }>;
 
-export type UserDTO = {
+export type Session = Readonly<{
   id: string;
-  role: UserRole;
-};
-
-export type Session<U extends UserDTO = UserDTO> = { user: U };
+  user: User;
+  expiresAt: Date;
+}>;
 
 export type LoginResult =
-  | { status: "ok"; user: UserDTO }
-  | { status: "invalid_credentials" }
-  | { status: "disabled" };
+  | Readonly<{ status: "ok"; user: User }>
+  | Readonly<{ status: "invalid_credentials" | "disabled" }>;
 
 export type RegisterResult =
-  | { status: "registered"; user: UserDTO }
-  | { status: "pending_approval" }
-  | { status: "username_taken" };
+  | Readonly<{ status: "registered"; user: User }>
+  | Readonly<{ status: "pending_approval" | "username_taken" }>;
+
+export type ExternalIdentity = Readonly<{
+  providerId: string;
+  externalId: string;
+  email: string | null;
+  displayName: string;
+  raw: Readonly<Record<string, unknown>>;
+}>;
+
+export interface SSOProvider {
+  initiate(request: Request): Promise<Response>;
+  handleCallback(request: Request): Promise<ExternalIdentity>;
+}

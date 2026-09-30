@@ -2,6 +2,8 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
+import importPlugin from "eslint-plugin-import";
+import architecture from "./eslint.architecture.js";
 
 /**
  * Base ESLint config shared across all projects using this framework.
@@ -16,6 +18,13 @@ export default tseslint.config(
   {
     plugins: {
       "react-hooks": reactHooks,
+      chromatis: architecture,
+      import: importPlugin,
+    },
+    settings: {
+      "import/resolver": {
+        typescript: true,
+      },
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
@@ -38,8 +47,23 @@ export default tseslint.config(
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
 
-      // Console is fine in server code but warn to avoid accidental leaks
-      "no-console": ["warn", { allow: ["warn", "error"] }],
+      "chromatis/dependencies": "error",
+      "chromatis/module-layout": "error",
+      "import/no-cycle": "error",
+      "no-console": ["error", { allow: ["log", "info", "warn", "error"] }],
+      "no-var": "error",
+      "prefer-const": "error",
+      eqeqeq: ["error", "always"],
+      curly: ["error", "all"],
+      "no-param-reassign": "error",
+      "max-lines": [
+        "error",
+        { max: 500, skipBlankLines: true, skipComments: true },
+      ],
+      "max-lines-per-function": [
+        "error",
+        { max: 100, skipBlankLines: true, skipComments: true },
+      ],
     },
   },
   {

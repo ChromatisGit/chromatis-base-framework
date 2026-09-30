@@ -1,10 +1,7 @@
 {
   "extends": "./infra/tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"],
-    "paths": {
-      "@platform/*": ["./src/*"]
-    }
+    "types": ["node", "bun"]
   },
   "include": ["src/**/*"]
 }

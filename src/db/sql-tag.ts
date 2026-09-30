@@ -1,10 +1,12 @@
 import type { DbSql, SqlFragment, SqlQueryValue } from "./types.js";
 
 function isSqlFragment(value: unknown): value is SqlFragment {
-  return typeof value === "object"
-    && value !== null
-    && "kind" in value
-    && (value as SqlFragment).kind === "fragment";
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "kind" in value &&
+    (value as SqlFragment).kind === "fragment"
+  );
 }
 
 function shiftPlaceholders(text: string, offset: number): string {
@@ -12,10 +14,16 @@ function shiftPlaceholders(text: string, offset: number): string {
     return text;
   }
 
-  return text.replace(/\$(\d+)/g, (_, rawIndex: string) => `$${Number(rawIndex) + offset}`);
+  return text.replace(
+    /\$(\d+)/g,
+    (_, rawIndex: string) => `$${Number(rawIndex) + offset}`,
+  );
 }
 
-function compileQuery(strings: readonly string[], values: readonly SqlQueryValue[]): SqlFragment {
+function compileQuery(
+  strings: readonly string[],
+  values: readonly SqlQueryValue[],
+): SqlFragment {
   let text = "";
   const params: unknown[] = [];
 
@@ -49,13 +57,16 @@ function escapeIdentifier(identifier: string): string {
     throw new Error(`Unsafe SQL identifier: "${identifier}"`);
   }
 
-  return `"${identifier.replace(/"/g, "\"\"")}"`;
+  return `"${identifier.replace(/"/g, '""')}"`;
 }
 
 export function createSqlTag(
   execute: (query: SqlFragment) => Promise<unknown[]>,
 ): DbSql {
-  const sql = ((first: string | TemplateStringsArray, ...rest: SqlQueryValue[]) => {
+  const sql = ((
+    first: string | TemplateStringsArray,
+    ...rest: SqlQueryValue[]
+  ) => {
     if (typeof first === "string") {
       return sql.unsafe(first);
     }
