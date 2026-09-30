@@ -1,47 +1,57 @@
 import type { ButtonHTMLAttributes } from "react";
-
 import { cn } from "./cn.js";
 
-type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "destructive";
-type ButtonSize = "sm" | "md" | "lg" | "icon";
+export type ButtonRole =
+  | "primary"
+  | "secondary"
+  | "accent"
+  | "ghost"
+  | "destructive";
+export type ButtonSize = "sm" | "md" | "lg";
 
-const variantClasses: Record<ButtonVariant, string> = {
-  primary: "bg-primary text-primary-foreground hover:opacity-90",
-  secondary: "bg-muted text-foreground hover:bg-accent",
-  outline: "border border-border bg-card text-foreground hover:bg-accent",
-  ghost: "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
-  destructive: "bg-destructive text-destructive-foreground hover:opacity-90",
-};
-
-const sizeClasses: Record<ButtonSize, string> = {
-  sm: "min-h-9 rounded-xl px-3 text-sm",
-  md: "min-h-11 rounded-2xl px-4 text-sm",
-  lg: "min-h-14 rounded-2xl px-6 text-base",
-  icon: "h-11 w-11 rounded-full p-0",
-};
-
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: ButtonVariant;
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  role?: ButtonRole;
   size?: ButtonSize;
+  blockMobile?: boolean;
+  busy?: boolean;
+}
+
+export function buttonClassName({
+  role = "primary",
+  size = "md",
+  blockMobile = false,
+  className,
+}: Pick<ButtonProps, "role" | "size" | "blockMobile" | "className">) {
+  return cn(
+    "btn",
+    `btn--${role}`,
+    size !== "md" && `btn--${size}`,
+    blockMobile && "btn--block-mobile",
+    className,
+  );
 }
 
 export function Button({
-  className,
-  variant = "primary",
+  role = "primary",
   size = "md",
+  blockMobile = false,
+  busy = false,
+  disabled,
+  className,
+  children,
   type = "button",
   ...props
 }: ButtonProps) {
   return (
     <button
       type={type}
-      className={cn(
-        "inline-flex items-center justify-center gap-2 font-medium transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50",
-        variantClasses[variant],
-        sizeClasses[size],
-        className,
-      )}
+      className={buttonClassName({ role, size, blockMobile, className })}
+      disabled={disabled || busy}
+      aria-busy={busy || undefined}
       {...props}
-    />
+    >
+      {busy && <span className="spinner" aria-hidden="true" />}
+      {children}
+    </button>
   );
 }

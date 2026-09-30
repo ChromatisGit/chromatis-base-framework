@@ -1,23 +1,35 @@
-import { type HTMLAttributes, useEffect } from "react"
-import { cn } from "../primitives/cn"
+import { type HTMLAttributes, useEffect } from "react";
+import { cn } from "../primitives/cn.js";
 
-interface PageProps extends HTMLAttributes<HTMLDivElement> {
-  title?: string
+export interface PageProps extends HTMLAttributes<HTMLDivElement> {
+  title?: string;
+  width?: "reading" | "content" | "wide";
 }
 
-export function Page({ title, className, children, ...props }: PageProps) {
+export function Page({
+  title,
+  width = "reading",
+  className,
+  children,
+  ...props
+}: PageProps) {
   useEffect(() => {
-    if (title) document.title = title
-  }, [title])
+    if (title) {
+      document.title = title;
+    }
+  }, [title]);
 
   return (
     <div
-      className={cn("flex flex-col min-h-full w-full overflow-y-auto", className)}
+      className={cn(
+        "container",
+        "page",
+        width !== "content" && `container--${width}`,
+        className,
+      )}
       {...props}
     >
-      <div className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
-        {children}
-      </div>
+      {children}
     </div>
-  )
+  );
 }

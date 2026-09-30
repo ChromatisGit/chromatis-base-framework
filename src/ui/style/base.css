@@ -1,0 +1,492 @@
+/* =====================================================================
+   BASE — reset, typography, focus, layout primitives, surfaces
+   Mobile first: base rules target 320px+, media queries only add.
+   ===================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root {
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+html {
+  scroll-padding-top: calc(
+    env(safe-area-inset-top, 0px) + var(--header-height-sticky) +
+      var(--space-400)
+  );
+}
+:root[data-text-size="150"] {
+  font-size: 150%;
+}
+:root[data-text-size="200"] {
+  font-size: 200%;
+}
+
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  line-height: var(--leading-body);
+  color: var(--color-text);
+  background: var(--color-bg);
+  overflow-wrap: break-word;
+}
+
+img,
+svg,
+video {
+  max-width: 100%;
+}
+img {
+  height: auto;
+  display: block;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+figure,
+blockquote,
+dl,
+dd {
+  margin: 0;
+}
+ul[class],
+ol[class] {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+hr {
+  border: 0;
+  border-top: var(--border-1) solid var(--color-border-subtle);
+  margin: 0;
+}
+
+/* ---- Focus (§8) ---------------------------------------------------- */
+/* Default ring: 2px solid focus color, 2px outside the element. Contained
+   items (tabs, navigation rows) may use --focus-offset-inset instead.
+   Focus is never removed without a visible replacement. */
+:focus-visible {
+  outline: var(--focus-width) solid var(--color-border-focus);
+  outline-offset: var(--focus-offset);
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+/* Programmatic focus targets (route headings, <main> for the skip link) are not
+   interactive, so they do not need a ring - screen readers still announce them. */
+[tabindex="-1"]:focus {
+  outline: none;
+}
+
+/* ---- Icons --------------------------------------------------------- */
+.icon {
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  flex: none;
+  fill: currentColor;
+  vertical-align: middle;
+}
+.icon--sm {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+}
+.icon--lg {
+  width: var(--size-icon-lg);
+  height: var(--size-icon-lg);
+}
+.icon--xl {
+  width: var(--size-icon-xl);
+  height: var(--size-icon-xl);
+}
+
+/* ---- Typography (§5) ---------------------------------------------- */
+.h1,
+.h2,
+.h3,
+.h4,
+.display {
+  font-weight: var(--weight-bold);
+  text-wrap: balance;
+}
+/* A word longer than the line (large text, long German compounds, URLs)
+   breaks instead of pushing the page sideways. No effect otherwise. */
+:is(h1, h2, h3, h4, .h1, .h2, .h3, .h4, .display) {
+  overflow-wrap: anywhere;
+}
+.h1 {
+  font-size: var(--text-3xl);
+  line-height: var(--leading-heading);
+}
+.h2 {
+  font-size: var(--text-2xl);
+  line-height: var(--leading-label);
+}
+.h3 {
+  font-size: var(--text-xl);
+  line-height: var(--leading-label);
+}
+.h4 {
+  font-size: var(--text-lg);
+  line-height: var(--leading-label);
+}
+.display {
+  font-family: var(--font-display);
+  font-size: var(--text-4xl);
+  line-height: var(--leading-display);
+}
+/* Optional tighter editorial variant; not the default */
+.display--tight {
+  line-height: var(--leading-display-tight);
+}
+.serif {
+  font-family: var(--font-display);
+}
+.lead {
+  font-size: var(--text-lg);
+  line-height: var(--leading-body);
+  max-width: var(--measure);
+}
+.small,
+small {
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+.label-text {
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-label);
+}
+.muted {
+  color: var(--color-text-muted);
+}
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 768px) {
+  .h1 {
+    font-size: var(--text-5xl);
+  }
+  .h2 {
+    font-size: var(--text-3xl);
+    line-height: var(--leading-heading);
+  }
+  .display {
+    font-size: var(--text-5xl);
+  }
+}
+@media (min-width: 1024px) {
+  .display {
+    font-size: var(--text-6xl);
+  }
+}
+
+/* Long-form text */
+.prose {
+  max-width: var(--measure);
+}
+.prose > * + * {
+  margin-top: var(--space-400);
+}
+.prose > :is(h2, h3, h4) {
+  margin-top: var(--space-700);
+}
+.prose > :is(h2, h3, h4) + * {
+  margin-top: var(--space-300);
+}
+.prose ul,
+.prose ol {
+  padding-left: 1.25em;
+}
+ul.prose {
+  list-style: disc;
+  padding-left: 1.25em;
+}
+ol.prose {
+  list-style: decimal;
+  padding-left: 1.25em;
+}
+ul.prose > li + li,
+ol.prose > li + li {
+  margin-top: var(--space-200);
+}
+.prose li + li {
+  margin-top: var(--space-200);
+}
+
+/* ---- Accessibility helpers ---------------------------------------- */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.skip-link {
+  position: absolute;
+  left: var(--space-400);
+  top: calc(env(safe-area-inset-top, 0px) + var(--space-200));
+  z-index: calc(var(--z-header) + 10);
+  padding: var(--space-300) var(--space-400);
+  background: var(--color-action-primary-bg);
+  color: var(--color-action-primary-fg);
+  font-weight: var(--weight-bold);
+  border-radius: var(--radius-sm);
+  transform: translateY(-200%);
+}
+.skip-link:focus {
+  transform: none;
+}
+
+/* ---- Layout primitives (§10) -------------------------------------- */
+.container {
+  width: 100%;
+  max-width: calc(var(--container-content) + 2 * var(--page-gutter));
+  margin-inline: auto;
+  padding-inline: max(var(--page-gutter), env(safe-area-inset-left, 0px))
+    max(var(--page-gutter), env(safe-area-inset-right, 0px));
+}
+.container--reading {
+  max-width: calc(var(--container-reading) + 2 * var(--page-gutter));
+}
+.container--wide {
+  max-width: calc(var(--container-wide) + 2 * var(--page-gutter));
+}
+
+.section {
+  padding-block: var(--space-900);
+}
+@media (min-width: 768px) {
+  .section {
+    padding-block: var(--space-1000);
+  }
+}
+@media (min-width: 1024px) {
+  .section {
+    padding-block: var(--space-1100);
+  }
+}
+.section--tight {
+  padding-block: var(--space-700);
+}
+
+/* Stack: vertical rhythm through gap tokens */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--stack-gap, var(--space-400));
+}
+.stack-200 {
+  --stack-gap: var(--space-200);
+}
+.stack-300 {
+  --stack-gap: var(--space-300);
+}
+.stack-600 {
+  --stack-gap: var(--space-600);
+}
+.stack-700 {
+  --stack-gap: var(--space-700);
+}
+.stack-900 {
+  --stack-gap: var(--space-900);
+}
+.stack > * {
+  min-width: 0;
+}
+
+/* Cluster: wrapping horizontal group */
+.cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cluster-gap, var(--space-300));
+}
+
+/* 4 / 8 / 12 column grid */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(var(--grid-columns), minmax(0, 1fr));
+  gap: var(--grid-gutter);
+}
+.grid > * {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+@media (min-width: 768px) {
+  .grid > .md-span-4 {
+    grid-column: span 4;
+  }
+  .grid > .md-span-8 {
+    grid-column: span 8;
+  }
+}
+@media (min-width: 1024px) {
+  .grid > .lg-span-3 {
+    grid-column: span 3;
+  }
+  .grid > .lg-span-4 {
+    grid-column: span 4;
+  }
+  .grid > .lg-span-5 {
+    grid-column: span 5;
+  }
+  .grid > .lg-span-6 {
+    grid-column: span 6;
+  }
+  .grid > .lg-span-7 {
+    grid-column: span 7;
+  }
+  .grid > .lg-span-8 {
+    grid-column: span 8;
+  }
+  .grid > .lg-start-7 {
+    grid-column: 7 / -1;
+  }
+}
+
+/* Section helpers */
+.section--flush-top {
+  padding-top: 0;
+}
+.section-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-200);
+  max-width: var(--measure);
+}
+
+/* Columns separated by a top rule — structure without boxes */
+.columns-ruled {
+  display: grid;
+  gap: var(--space-700);
+}
+.columns-ruled > * {
+  padding-top: var(--space-400);
+  border-top: var(--border-2) solid var(--color-text);
+  min-width: 0;
+}
+@media (min-width: 768px) {
+  .columns-ruled {
+    grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
+    gap: var(--grid-gutter);
+  }
+}
+
+/* ---- Surfaces ----------------------------------------------------- */
+.surface-subtle {
+  background: var(--color-bg-subtle);
+}
+.surface-emphasis {
+  --color-bg: var(--color-bg-emphasis);
+  --color-bg-subtle: color-mix(
+    in srgb,
+    var(--color-text-on-emphasis) 8%,
+    var(--color-bg-emphasis)
+  );
+  --color-text: var(--color-text-on-emphasis);
+  --color-link: var(--color-text-on-emphasis);
+  --color-border-focus: var(--color-border-focus-on-emphasis);
+  --color-action-primary-bg: var(--color-on-emphasis-primary-bg);
+  --color-action-primary-fg: var(--color-on-emphasis-primary-fg);
+  --color-action-primary-bg-hover: var(--color-on-emphasis-primary-bg-hover);
+  --color-action-primary-fg-hover: var(--color-on-emphasis-primary-fg-hover);
+  --color-action-primary-border-hover: var(
+    --color-on-emphasis-primary-bg-hover
+  );
+  --color-action-accent-border-hover: var(--color-text-on-emphasis);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+/* Yellow field. Remaps tokens like .surface-emphasis so everything placed on
+   it (links, buttons, focus, hairlines) stays legible in light and dark mode.
+   Cards use the same remap through data-surface="accent". */
+.surface-accent,
+[data-surface="accent"] {
+  --color-bg: var(--color-bg-accent);
+  --color-bg-subtle: color-mix(
+    in srgb,
+    var(--color-text-on-accent) 8%,
+    var(--color-bg-accent)
+  );
+  --color-text: var(--color-text-on-accent);
+  --color-link: var(--color-text-on-accent);
+  --color-link-hover-bg: var(--color-text-on-accent);
+  --color-link-hover-fg: var(--color-bg-accent);
+  --color-border-focus: var(
+    --color-border-focus-on-accent,
+    var(--color-text-on-accent)
+  );
+  --color-action-primary-bg: var(
+    --color-on-accent-primary-bg,
+    var(--color-text-on-accent)
+  );
+  --color-action-primary-fg: var(
+    --color-on-accent-primary-fg,
+    var(--color-bg-accent)
+  );
+  --color-action-primary-bg-hover: var(
+    --color-on-accent-primary-bg-hover,
+    var(--color-text-inverse)
+  );
+  --color-action-primary-fg-hover: var(
+    --color-on-accent-primary-fg-hover,
+    var(--color-text-on-accent)
+  );
+  --color-action-primary-border-hover: var(--color-text-on-accent);
+  --color-action-accent-bg: var(
+    --color-on-accent-primary-bg-hover,
+    var(--color-text-inverse)
+  );
+  --color-action-accent-border-hover: var(--color-text-on-accent);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+/* Brand bar (header): same idea, own primitives so a theme can choose a
+   brand color that differs from its accent. */
+.surface-brand {
+  --color-bg: var(--color-brand-bar-bg, var(--color-bg-accent));
+  --color-text: var(--color-brand-bar-fg, var(--color-text-on-accent));
+  --color-link: var(--color-text);
+  --color-border-focus: var(--color-brand-bar-focus, var(--color-border-focus));
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+/* ---- Color modes ------------------------------------------------- */
+/* A light-only theme (--theme-color-modes: light) offers no dark mode:
+   UISettings sets data-color-modes on <html> and the toggles disappear. */
+:root[data-color-modes="light"] [data-mode-toggle] {
+  display: none;
+}
+
+/* ---- Forced colors ------------------------------------------------ */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline-color: Highlight;
+  }
+}

@@ -1,0 +1,479 @@
+/* =====================================================================
+   PATTERNS — recurring compositions of components
+   Form field, card grid, record list, facts, steps, page header, service
+   and editorial page compositions. Patterns only arrange components;
+   they add no new states.
+   Rules: only semantic tokens, no brand values, mobile first.
+   .is-hover / .is-focus / .is-active mirror pseudo-classes so the test
+   pages can show every state side by side. They are not needed in
+   production markup.
+   ===================================================================== */
+
+/* =====================================================================
+   FORM FIELD (§15) — label · optional · input · help · error
+   ===================================================================== */
+.field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.field__label {
+  display: block;
+  margin-bottom: var(--space-200);
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-label);
+}
+.field__optional {
+  font-weight: var(--weight-regular);
+  color: var(--color-text-muted);
+}
+.field__help,
+.field__error {
+  overflow-wrap: anywhere;
+}
+.field__error {
+  margin-top: var(--space-200);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+.field__help {
+  color: var(--color-text-muted);
+}
+.field__label + .field__help {
+  margin-top: calc(-1 * var(--space-100));
+  margin-bottom: var(--space-200);
+}
+.field__error {
+  display: flex;
+  gap: var(--space-200);
+  align-items: flex-start;
+  color: var(--color-status-error);
+  font-weight: var(--weight-bold);
+}
+.field__error .icon {
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  margin-top: 1px;
+}
+.field__error[hidden] {
+  display: none;
+}
+
+/* =====================================================================
+   FILTER BAR — search plus one or two filters above a list
+   Stacks on phones; one row from 768px. Applies on submit.
+   ===================================================================== */
+.filter-bar {
+  display: grid;
+  gap: var(--space-400);
+  align-items: end;
+}
+@media (min-width: 768px) {
+  .filter-bar {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  }
+  .filter-bar > .btn {
+    margin-bottom: calc((var(--field-height) - var(--button-height-md)) / 2);
+  }
+}
+
+/* =====================================================================
+   CARD GRID — tiles share the grid, not an internal template
+   ===================================================================== */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  gap: var(--grid-gutter);
+}
+
+/* =====================================================================
+   RECORD LIST — work items with title, meta line and status
+   ===================================================================== */
+.record-list > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-200);
+  padding-block: var(--space-400);
+  border-top: var(--border-1) solid var(--color-border-subtle);
+}
+.record-list > li:last-child {
+  border-bottom: var(--border-1) solid var(--color-border-subtle);
+}
+.record-list__title {
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-label);
+}
+.record-list__title a {
+  color: var(--color-link);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 0.2em;
+}
+.record-list__title a:hover {
+  text-decoration-color: currentColor;
+}
+.record-list__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-100) var(--space-400);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.record-list__status {
+  justify-self: start;
+  align-self: start;
+}
+@container (min-width: 36rem) {
+  .record-list > li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: var(--space-600);
+  }
+  .record-list__status {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    justify-self: end;
+  }
+}
+
+/* =====================================================================
+   STEPS — numbered procedure. Number column + content; spacing, not
+   rules, separates the steps. .steps--row puts them side by side ≥768px.
+   ===================================================================== */
+.steps {
+  counter-reset: step;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-600);
+} /* the column may shrink; long words wrap */
+.steps__item {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+.steps__item {
+  position: relative;
+  display: grid;
+  gap: var(--space-200);
+  padding-left: calc(2rem + var(--space-400));
+}
+.steps__item::before {
+  counter-increment: step;
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-round);
+  background: var(--color-action-primary-bg);
+  color: var(--color-action-primary-fg);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+.steps__item > :first-child {
+  min-height: 2rem;
+  display: flex;
+  align-items: center;
+}
+@media (min-width: 768px) {
+  .steps--row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* =====================================================================
+   CONTENT PATTERNS
+   ===================================================================== */
+
+/* Facts: key/value pairs. Spacing groups them; .facts--ruled adds
+   hairlines where rows must be scanned across (e.g. inside a table-like list). */
+.facts {
+  display: grid;
+  gap: var(--space-400);
+  margin: 0;
+}
+.facts > div {
+  display: grid;
+  gap: var(--space-100);
+}
+.facts dt {
+  font-weight: var(--weight-bold);
+}
+.facts dd {
+  margin: 0;
+}
+@media (min-width: 480px) {
+  .facts--inline > div {
+    grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
+    gap: var(--space-400);
+  }
+}
+.facts--compact {
+  gap: var(--space-200);
+}
+.facts--compact > div {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-400);
+}
+.facts--compact dt {
+  font-weight: var(--weight-regular);
+}
+.facts--ruled {
+  gap: 0;
+}
+.facts--ruled > div {
+  padding-block: var(--space-300);
+  border-top: var(--border-1) solid var(--color-border-subtle);
+}
+.facts--ruled > div:last-child {
+  border-bottom: var(--border-1) solid var(--color-border-subtle);
+}
+
+/* Plain list of standalone links */
+.link-list {
+  display: grid;
+  gap: var(--space-100);
+}
+
+/* Kicker above a headline */
+.kicker {
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-label);
+}
+
+/* Table of contents for long pages */
+.toc__title {
+  font-weight: var(--weight-bold);
+  margin-bottom: var(--space-200);
+}
+.toc__list a {
+  display: flex;
+  align-items: center;
+  min-height: var(--target-min);
+  color: var(--color-link);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.toc__list a:hover {
+  text-decoration-thickness: 2px;
+}
+.toc__list a:focus-visible {
+  outline-offset: 0;
+}
+
+/* Content sections of a service page: heading + body, divided by hairlines */
+.content-sections {
+  min-width: 0;
+}
+.content-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-400);
+}
+.content-section > :is(h2, h3):first-child {
+  margin-bottom: calc(-1 * var(--space-100));
+} /* heading → text: 12px */
+.content-section + .content-section {
+  margin-top: var(--space-900);
+}
+@media (min-width: 768px) {
+  .content-section + .content-section {
+    margin-top: var(--space-1000);
+  }
+}
+.content-section:focus {
+  outline: none;
+}
+
+/* Quote on a color field */
+.quote {
+  display: grid;
+  gap: var(--space-500);
+  margin-block: 0;
+}
+.quote__text {
+  margin: 0;
+  max-width: 28ch;
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-heading);
+}
+@media (min-width: 768px) {
+  .quote__text {
+    font-size: var(--text-4xl);
+  }
+}
+@media (min-width: 1024px) {
+  .quote__text {
+    font-size: var(--text-5xl);
+  }
+}
+.quote__source {
+  font-weight: var(--weight-bold);
+}
+
+/* News list: date + headline link, hairline rows */
+.news-list > li {
+  display: grid;
+  gap: var(--space-100);
+  padding-block: var(--space-400);
+  border-top: var(--border-1) solid var(--color-border-subtle);
+}
+.news-list > li:last-child {
+  border-bottom: var(--border-1) solid var(--color-border-subtle);
+}
+.news-list time {
+  font-size: var(--text-sm);
+}
+.news-list a {
+  color: var(--color-link);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-label);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 0.2em;
+}
+.news-list a:hover {
+  text-decoration-color: currentColor;
+}
+@media (min-width: 768px) {
+  .news-list > li {
+    grid-template-columns: 10rem minmax(0, 1fr);
+    gap: var(--space-600);
+    align-items: baseline;
+  }
+}
+
+/* =====================================================================
+   PAGE TEMPLATES
+   Service (transactional): predominantly sans, direct hierarchy, fast
+   route to the task. Editorial (state portal): serif, large images,
+   stronger compositions.
+   ===================================================================== */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-600);
+  padding-bottom: var(--space-900);
+}
+.page > .page-head {
+  padding-bottom: var(--space-200);
+}
+.page-head {
+  padding-block: var(--space-500) var(--space-700);
+}
+@media (min-width: 1024px) {
+  .page-head {
+    padding-block: var(--space-600) var(--space-800);
+  }
+}
+
+/* Service: the online action on a yellow field (the one yellow element of
+   a transactional page), quick facts beside it on the page background */
+/* The track may shrink below its content's natural width (minmax(0, …)),
+   so long words and large text wrap inside the block instead of pushing
+   the page sideways. The field's padding never takes more than a small
+   share of a narrow screen, even with enlarged text. */
+.service-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-700);
+  align-items: start;
+}
+.service-action > * {
+  min-width: 0;
+}
+.service-action__cta {
+  padding: min(var(--space-600), 6vw);
+  border-radius: var(--radius-surface-lg);
+}
+@media (min-width: 768px) {
+  .service-action__cta {
+    padding: min(var(--space-700), 4vw);
+  }
+}
+@media (min-width: 1024px) {
+  .service-action {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 4fr);
+    gap: var(--space-900);
+  }
+  .service-action > .facts {
+    padding-top: var(--space-600);
+  }
+}
+.service-layout {
+  display: grid;
+  gap: var(--space-800);
+}
+@media (min-width: 1024px) {
+  .service-layout {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 8fr);
+    gap: var(--space-900);
+  }
+  .service-layout .toc {
+    position: sticky;
+    top: calc(var(--header-height-sticky) + var(--space-600));
+    align-self: start;
+  }
+}
+
+/* Editorial */
+.editorial-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-500);
+  max-width: 52rem;
+  padding-bottom: var(--space-800);
+}
+.editorial-figure {
+  margin: 0 auto var(--space-800);
+  display: grid;
+  gap: var(--space-300);
+}
+@media (min-width: 1024px) {
+  .editorial-figure {
+    margin-bottom: var(--space-900);
+  }
+}
+.editorial-intro {
+  padding-bottom: var(--space-800);
+}
+.editorial-body {
+  max-width: var(--measure);
+}
+/* A full-width color field between two body blocks */
+.editorial-band {
+  margin-block: var(--space-900);
+}
+@media (min-width: 1024px) {
+  .editorial-band {
+    margin-block: var(--space-1000);
+  }
+}
+.editorial-figure .media-placeholder {
+  border-radius: 0;
+} /* page-level image region: rectangular */
+@media (max-width: 767.98px) {
+  .editorial-figure .media-placeholder {
+    margin-inline: calc(-1 * var(--page-gutter));
+    width: calc(100% + 2 * var(--page-gutter));
+    max-width: none;
+    --ratio: 4 / 3;
+  }
+}
+.prose--editorial > h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  line-height: var(--leading-heading);
+}
+@media (min-width: 768px) {
+  .prose--editorial > h2 {
+    font-size: var(--text-3xl);
+  }
+}

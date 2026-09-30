@@ -19,7 +19,9 @@ function getComposeEnv(url: URL): NodeJS.ProcessEnv {
   const dbPort = url.port || "5432";
 
   if (!dbName || !dbUser || !dbPassword) {
-    throw new Error("database URL must include database name, username, and password.");
+    throw new Error(
+      "database URL must include database name, username, and password.",
+    );
   }
 
   const dockerUrl = `${url.protocol}//${encodeURIComponent(dbUser)}:${encodeURIComponent(dbPassword)}@db:5432/${encodeURIComponent(dbName)}`;
@@ -36,7 +38,10 @@ function getComposeEnv(url: URL): NodeJS.ProcessEnv {
 }
 
 function runDockerCompose(args: string[], env: NodeJS.ProcessEnv): void {
-  const composeFile = path.resolve(import.meta.dirname, "../docker/docker-compose.yml");
+  const composeFile = path.resolve(
+    import.meta.dirname,
+    "../docker/docker-compose.yml",
+  );
   const result = spawnSync("docker", ["compose", "-f", composeFile, ...args], {
     cwd: process.cwd(),
     env,
@@ -49,7 +54,10 @@ function runDockerCompose(args: string[], env: NodeJS.ProcessEnv): void {
   }
 }
 
-export function ensureDockerDb(databaseUrl: string, command: DockerCommand): void {
+export function ensureDockerDb(
+  databaseUrl: string,
+  command: DockerCommand,
+): void {
   const url = new URL(databaseUrl);
   assertLocalUrl(url);
   const env = getComposeEnv(url);

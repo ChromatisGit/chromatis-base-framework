@@ -1,0 +1,6 @@
+@layer tokens, theme, base, components, patterns, shell;
+@import "./tokens.css" layer(tokens);
+@import "./base.css" layer(base);
+@import "./components.css" layer(components);
+@import "./patterns.css" layer(patterns);
+@import "./shell.css" layer(shell);

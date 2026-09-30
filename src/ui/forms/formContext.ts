@@ -1,11 +1,13 @@
-import { createContext, useContext } from "react"
+import { createContext, useContext } from "react";
 
 interface FormContextValue {
-  isPending: boolean
+  isPending: boolean;
 }
 
-export const FormContext = createContext<FormContextValue>({ isPending: false })
+export const FormContext = createContext<FormContextValue>({
+  isPending: false,
+});
 
 export function useFormContext(): FormContextValue {
-  return useContext(FormContext)
+  return useContext(FormContext);
 }

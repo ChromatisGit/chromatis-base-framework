@@ -1,0 +1,1525 @@
+/* =====================================================================
+   COMPONENTS — core, reusable, theme-agnostic
+   Single building blocks with their own states: button, icon button,
+   link, input, choice, card, panel, alert, breadcrumbs, accordion, tabs,
+   pagination, table, badge, dialog, loading, empty state.
+   Rules: only semantic tokens, no brand values, mobile first.
+   .is-hover / .is-focus / .is-active mirror pseudo-classes so the test
+   pages can show every state side by side. They are not needed in
+   production markup.
+   ===================================================================== */
+
+/* =====================================================================
+   BUTTON (§11)
+   ===================================================================== */
+.btn {
+  --btn-bg: transparent;
+  --btn-fg: var(--color-text);
+  --btn-border: transparent;
+  --btn-bw: var(--border-2);
+  --btn-pad-block: 0.625rem; /* 10 */
+  --btn-pad-inline: var(--space-400); /* 16 */
+  --btn-height: var(--button-height-md);
+  --btn-font: var(--text-md);
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-200);
+  min-height: var(--btn-height);
+  /* Border width changes are compensated in padding → no layout shift */
+  padding: calc(var(--btn-pad-block) + var(--border-2) - var(--btn-bw))
+    calc(var(--btn-pad-inline) + var(--border-2) - var(--btn-bw));
+  border: var(--btn-bw) solid var(--btn-border);
+  border-radius: var(--radius-control);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  font-family: var(--font-body);
+  font-size: var(--btn-font);
+  font-weight: var(--weight-bold);
+  line-height: 1.25;
+  text-align: center;
+  text-decoration: none;
+  /* A label never pushes the page sideways: at very large text a long word
+     hyphenates (language-aware, via lang on <html>) before it overflows */
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  -webkit-hyphens: auto; /* Safari */
+  hyphens: auto;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard);
+}
+.btn .icon {
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+}
+.btn.is-focus {
+  outline: var(--focus-width) solid var(--color-border-focus);
+  outline-offset: var(--focus-offset);
+}
+
+/* Sizes */
+.btn--sm {
+  --btn-height: var(--button-height-sm);
+  --btn-pad-block: var(--space-100);
+  --btn-pad-inline: var(--space-300);
+  --btn-font: var(--text-sm);
+}
+.btn--sm .icon {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+}
+.btn--lg {
+  --btn-height: var(--button-height-lg);
+  --btn-pad-block: var(--space-300);
+  --btn-pad-inline: var(--space-500);
+  --btn-font: var(--text-lg);
+}
+.btn--lg .icon {
+  width: var(--size-icon-lg);
+  height: var(--size-icon-lg);
+}
+
+/* Primary. The hover mapping (e.g. yellow in Baden-Württemberg) belongs to
+   the theme; the component only reads the primary action tokens. */
+.btn--primary {
+  --btn-bg: var(--color-action-primary-bg);
+  --btn-fg: var(--color-action-primary-fg);
+}
+.btn--primary:is(:hover, .is-hover, :active, .is-active) {
+  --btn-bg: var(--color-action-primary-bg-hover);
+  --btn-fg: var(--color-action-primary-fg-hover);
+  --btn-border: var(--color-action-primary-border-hover);
+}
+
+/* Secondary: 1px control border. Hover strengthens the border color only;
+   width and size never change, so nothing next to it moves. Pressed adds
+   the pressed background. */
+.btn--secondary {
+  --btn-bw: var(--border-1);
+  --btn-border: var(--color-border-control);
+}
+.btn--secondary:is(:hover, .is-hover) {
+  --btn-border: var(--color-border-strong);
+}
+.btn--secondary:is(:active, .is-active) {
+  --btn-border: var(--color-border-strong);
+  --btn-bg: var(--color-bg-pressed);
+}
+
+/* Accent */
+.btn--accent {
+  --btn-bg: var(--color-action-accent-bg);
+  --btn-fg: var(--color-action-accent-fg);
+}
+.btn--accent:is(:hover, .is-hover, :active, .is-active) {
+  --btn-border: var(--color-action-accent-border-hover);
+}
+
+/* Ghost */
+.btn--ghost {
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 0.2em;
+}
+.btn--ghost:is(:hover, .is-hover) {
+  --btn-bg: var(--color-bg-hover);
+  text-decoration-color: currentColor;
+}
+.btn--ghost:is(:active, .is-active) {
+  --btn-bg: var(--color-bg-pressed);
+}
+
+/* Destructive */
+.btn--destructive {
+  --btn-bg: var(--color-action-destructive-bg);
+  --btn-fg: var(--color-action-destructive-fg);
+}
+.btn--destructive:is(:hover, .is-hover, :active, .is-active) {
+  --btn-bg: var(--color-action-destructive-bg-hover);
+  --btn-fg: var(
+    --color-action-destructive-fg-hover,
+    var(--color-action-destructive-fg)
+  );
+}
+
+/* Disabled: explicit colors, never opacity only. Declared last. */
+.btn:is(:disabled, [aria-disabled="true"]),
+.btn:is(:disabled, [aria-disabled="true"]):is(:hover, :active, .is-hover) {
+  --btn-bg: var(--color-disabled-bg);
+  --btn-fg: var(--color-disabled-fg);
+  --btn-border: var(--color-disabled-border);
+  --btn-bw: var(--border-1);
+  box-shadow: none;
+  cursor: not-allowed;
+  text-decoration-color: transparent;
+}
+.btn--ghost:is(:disabled, [aria-disabled="true"]) {
+  --btn-bg: transparent;
+  --btn-border: transparent;
+}
+
+/* Loading */
+.btn[aria-busy="true"] {
+  cursor: progress;
+}
+.btn[aria-busy="true"] > .icon {
+  display: none;
+}
+
+/* Full width on mobile (primary form actions) */
+.btn--block-mobile {
+  width: 100%;
+}
+@media (min-width: 480px) {
+  .btn--block-mobile {
+    width: auto;
+  }
+}
+
+/* Button group: Primary -> Secondary -> Ghost; stacks at narrow widths */
+.btn-group {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-300);
+}
+.btn-group > .btn {
+  width: 100%;
+}
+@media (min-width: 480px) {
+  .btn-group {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .btn-group > .btn {
+    width: auto;
+  }
+}
+.btn-group--end {
+  justify-content: flex-end;
+}
+
+/* =====================================================================
+   ICON BUTTON (§12)
+   ===================================================================== */
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: var(--target-min);
+  height: var(--target-min);
+  flex: none;
+  padding: 0;
+  border: var(--border-2) solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+.icon-btn .icon {
+  width: var(--size-icon-lg);
+  height: var(--size-icon-lg);
+}
+.icon-btn:is(:hover, .is-hover) {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-strong);
+}
+.icon-btn:is(:active, .is-active),
+.icon-btn[aria-pressed="true"],
+.icon-btn[aria-expanded="true"] {
+  background: var(--color-bg-pressed);
+}
+.icon-btn--outline {
+  border: var(--border-1) solid var(--color-border-control);
+}
+.icon-btn--outline:is(:hover, .is-hover) {
+  border-color: var(--color-border-strong);
+}
+.icon-btn--primary {
+  background: var(--color-action-primary-bg);
+  color: var(--color-action-primary-fg);
+}
+.icon-btn--primary:is(:hover, .is-hover) {
+  background: var(--color-action-primary-bg-hover);
+  color: var(--color-action-primary-fg-hover);
+  border-color: var(--color-action-primary-border-hover);
+}
+.icon-btn:disabled,
+.icon-btn:disabled:hover {
+  color: var(--color-disabled-fg);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* =====================================================================
+   LINK (§13)
+   ===================================================================== */
+.link,
+.prose a:not([class]) {
+  color: var(--color-link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  /* Padding + equal negative margin: the hover field extends past the
+     text, but the text itself never moves. clone keeps it on wrapped lines. */
+  padding-inline: 0.15em;
+  margin-inline: -0.15em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  border-radius: var(--radius-control);
+  /* Email addresses and URLs have no spaces: let them break anywhere
+     rather than push the page sideways at large text sizes */
+  overflow-wrap: anywhere;
+  transition: background-color var(--motion-fast) var(--ease-standard);
+}
+.link:is(:hover, .is-hover),
+.prose a:not([class]):hover {
+  background: var(--color-link-hover-bg);
+  color: var(--color-link-hover-fg);
+  text-decoration-thickness: 2px;
+}
+.link .icon {
+  width: 1em;
+  height: 1em;
+  margin-left: 0.2em;
+  vertical-align: -0.1em;
+}
+.link--standalone {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-200);
+  min-height: var(--target-min);
+  padding-inline: var(--space-200);
+  margin-inline: calc(-1 * var(--space-200));
+  max-width: calc(
+    100% + 2 * var(--space-200)
+  ); /* never wider than its column (incl. the hover bleed) */
+  font-weight: var(--weight-bold);
+}
+.link--standalone .icon {
+  flex: none;
+}
+/* The 44px target stays, but the hover field is a text-height band */
+.link--standalone:is(:hover, .is-hover) {
+  background: linear-gradient(
+      var(--color-link-hover-bg),
+      var(--color-link-hover-bg)
+    )
+    center / 100% 2em no-repeat;
+}
+.link--standalone .icon {
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  margin: 0;
+}
+
+/* =====================================================================
+   FORM FIELD (§15)
+   Order: label · optional · input · help · error
+   ===================================================================== */
+.input,
+.select__control,
+.textarea {
+  width: 100%;
+  min-height: var(--field-height);
+  padding: var(--space-300);
+  border: var(--border-1) solid var(--color-border-control);
+  border-radius: var(--radius-control);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--text-md);
+  line-height: 1.5rem;
+  transition:
+    box-shadow var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+.input {
+  padding-block: 0;
+}
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--color-text-placeholder);
+  opacity: 1;
+}
+/* Hover strengthens the border color only. The heavier 2px treatment is
+   reserved for invalid (below) and focus (the focus ring). */
+:is(.input, .select__control, .textarea):is(:hover, .is-hover):not(
+    :disabled,
+    [readonly]
+  ) {
+  border-color: var(--color-border-strong);
+}
+:is(.input, .select__control, .textarea).is-focus {
+  outline: var(--focus-width) solid var(--color-border-focus);
+  outline-offset: var(--focus-offset);
+}
+:is(.input, .select__control, .textarea)[aria-invalid="true"] {
+  border-color: var(--color-status-error);
+  box-shadow: inset 0 0 0 1px var(--color-status-error);
+}
+:is(.input, .select__control, .textarea):disabled {
+  background: var(--color-disabled-bg);
+  border-color: var(--color-disabled-border);
+  color: var(--color-disabled-fg);
+  cursor: not-allowed;
+}
+:is(.input, .textarea)[readonly] {
+  background: var(--color-bg-subtle);
+  border-style: dashed;
+}
+.textarea {
+  min-height: 7.5rem;
+  resize: vertical;
+  display: block;
+}
+
+/* Input with leading icon (search) */
+.input-group {
+  position: relative;
+}
+.input-group > .icon {
+  position: absolute;
+  left: var(--space-300);
+  top: 50%;
+  transform: translateY(-50%);
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  pointer-events: none;
+  color: var(--color-text-muted);
+}
+.input-group > .input {
+  padding-left: calc(var(--space-300) + var(--size-icon-md) + var(--space-200));
+}
+
+/* Select: native, custom chevron from the active icon set */
+.select {
+  position: relative;
+}
+.select__control {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-block: 0;
+  padding-right: calc(var(--space-300) * 2 + var(--size-icon-md));
+  cursor: pointer;
+}
+.select > .icon {
+  position: absolute;
+  right: var(--space-300);
+  top: 50%;
+  transform: translateY(-50%);
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  pointer-events: none;
+}
+
+/* Fieldset / group */
+.fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.fieldset__legend {
+  padding: 0;
+  margin-bottom: var(--space-200);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-label);
+}
+
+/* Error summary list inside alert */
+.error-summary__list {
+  margin: var(--space-200) 0 0;
+  padding-left: 1.25em;
+}
+.alert__content {
+  min-width: 0;
+  overflow-wrap: anywhere;
+} /* long addresses in messages */
+
+/* =====================================================================
+   CHECKBOX & RADIO (§16)
+   Control + label = one target; focus wraps the whole unit.
+   ===================================================================== */
+.choice-list {
+  display: flex;
+  flex-direction: column;
+}
+.choice-list--inline {
+  flex-direction: row;
+  flex-wrap: wrap;
+  column-gap: var(--space-600);
+}
+.choice {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-200);
+  min-height: var(--target-min);
+  padding-block: 0.625rem;
+  padding-inline: var(--space-100);
+  margin-inline: calc(-1 * var(--space-100));
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  line-height: var(--leading-body);
+}
+.choice__input {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  display: grid;
+  place-content: center;
+  width: var(--choice-size);
+  height: var(--choice-size);
+  margin: 0.125rem 0 0;
+  border: var(--border-2) solid var(--color-border-control);
+  border-radius: var(--radius-control);
+  background: var(--color-bg);
+  cursor: inherit;
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+.choice__input[type="radio"] {
+  border-radius: var(--radius-round);
+}
+.choice__input::before {
+  content: "";
+  width: 0.375rem;
+  height: 0.6875rem;
+  border: solid var(--color-action-primary-fg);
+  border-width: 0 2px 2px 0;
+  transform: translate(0, -1px) rotate(45deg) scale(0);
+  transition: transform var(--motion-fast) var(--ease-standard);
+}
+.choice__input[type="radio"]::before {
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 0;
+  border-radius: var(--radius-round);
+  background: var(--color-action-primary-fg);
+  transform: scale(0);
+}
+.choice:hover .choice__input:not(:disabled) {
+  border-color: var(--color-border-strong);
+}
+.choice__input:checked {
+  background: var(--color-action-primary-bg);
+  border-color: var(--color-action-primary-bg);
+}
+.choice__input:checked::before {
+  transform: translate(0, -1px) rotate(45deg) scale(1);
+}
+.choice__input[type="radio"]:checked::before {
+  transform: scale(1);
+}
+.choice__input[aria-invalid="true"] {
+  border-color: var(--color-status-error);
+}
+.choice__text {
+  min-width: 0;
+}
+.choice__hint {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.choice:has(.choice__input:disabled) {
+  cursor: not-allowed;
+  color: var(--color-disabled-fg);
+}
+.choice__input:disabled {
+  background: var(--color-disabled-bg);
+  border-color: var(--color-disabled-border);
+}
+.choice__input:disabled:checked {
+  background: var(--color-disabled-fg);
+  border-color: var(--color-disabled-fg);
+}
+
+@supports selector(:has(a)) {
+  .choice__input:focus-visible {
+    outline: none;
+  }
+  .choice:has(.choice__input:focus-visible) {
+    outline: var(--focus-width) solid var(--color-border-focus);
+    outline-offset: 0; /* the row's own padding already clears the control */
+  }
+}
+@media (forced-colors: active) {
+  .choice__input:checked {
+    background: Highlight;
+    border-color: Highlight;
+  }
+  .choice__input::before {
+    border-color: HighlightText;
+  }
+  .choice__input[type="radio"]::before {
+    background: HighlightText;
+  }
+}
+
+/* =====================================================================
+   PLACEHOLDER MEDIA — theme-aware, no network requests
+   ===================================================================== */
+.media-placeholder {
+  display: grid;
+  place-items: center;
+  aspect-ratio: var(--ratio, 16 / 9);
+  width: 100%;
+  color: var(--color-text-muted);
+  background:
+    repeating-linear-gradient(
+      135deg,
+      transparent 0 14px,
+      color-mix(in srgb, var(--color-text) 6%, transparent) 14px 28px
+    ),
+    var(--color-bg-subtle);
+  border-radius: var(--radius-surface);
+}
+.media-placeholder .icon {
+  width: var(--size-icon-xl);
+  height: var(--size-icon-xl);
+  opacity: 0.8;
+}
+.media-placeholder--square {
+  --ratio: 1 / 1;
+}
+.media-placeholder--portrait {
+  --ratio: 4 / 5;
+}
+.media-placeholder--wide {
+  --ratio: 21 / 9;
+}
+
+/* =====================================================================
+   CARD (§17) — four archetypes, one small set of options
+   ---------------------------------------------------------------------
+   Archetype (class)   Purpose                          Defaults
+   .card--content      static grouped content           subtle surface, no border
+   .card--action       one destination or task; the     page surface, default border,
+                       whole card is the target         interactive, arrow cue
+   .card--media        image-led teaser                 media on top, no surface
+   .card--stat         a number that matters            subtle surface, no border
+
+   Options (data attributes; all optional, same meaning on every archetype)
+   data-surface      default | subtle | accent   accent remaps tokens like
+                                                 .surface-accent — rare, for one
+                                                 genuinely important item
+   data-border       none | default | strong
+   data-orientation  vertical | horizontal       horizontal from 480px
+   data-interactive  true | false                action cards are always true
+   data-media        none | top | side           side implies horizontal
+   data-emphasis     default | strong            larger title / value
+
+   Every card shares spacing, the surface radius, typography, focus and
+   hover. Interactive cards have one stretched link (.card__link); hover
+   strengthens the border and underlines the title — no shadow, no
+   movement, no geometry change. Cards stay flat: elevation is for
+   overlays only. Do not add new card components for visual differences;
+   express them with these options.
+   ===================================================================== */
+.card {
+  --card-pad: var(--space-500);
+  --card-bg: var(--color-bg-subtle);
+  --card-border: transparent;
+  --card-gap: var(--space-300);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--card-gap);
+  padding: var(--card-pad);
+  background: var(--card-bg);
+  color: var(--color-text);
+  border: var(--border-1) solid var(--card-border);
+  border-radius: var(--radius-surface);
+  min-width: 0;
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+@media (min-width: 768px) {
+  .card {
+    --card-pad: var(--space-600);
+  }
+}
+/* On a subtle band the subtle surface would vanish: content cards flip to the page color */
+.surface-subtle .card:not([data-surface]) {
+  --card-bg: var(--color-bg);
+}
+
+.card__media {
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+.card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-200);
+  min-width: 0;
+}
+.card__title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-label);
+}
+.card__meta {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+.card__footer {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-300);
+  padding-top: var(--space-200);
+}
+.card__cue {
+  width: var(--size-icon-lg);
+  height: var(--size-icon-lg);
+  margin-top: auto;
+}
+
+/* ---- Archetype defaults ------------------------------------------- */
+.card--action {
+  --card-bg: var(--color-bg);
+  --card-border: var(--color-border-subtle);
+}
+.card--media {
+  --card-bg: transparent;
+}
+.card--stat {
+  --card-gap: var(--space-200);
+}
+.card__value {
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-heading);
+  font-variant-numeric: tabular-nums;
+}
+.card__label {
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-label);
+}
+
+/* ---- Options ------------------------------------------------------ */
+.card[data-surface="default"] {
+  --card-bg: var(--color-bg);
+}
+.card[data-surface="subtle"] {
+  --card-bg: var(--color-bg-subtle);
+}
+.card[data-surface="accent"] {
+  --card-bg: var(--color-bg);
+} /* the remapped page color = accent */
+.card[data-border="none"] {
+  --card-border: transparent;
+}
+.card[data-border="default"] {
+  --card-border: var(--color-border-subtle);
+}
+.card[data-border="strong"] {
+  --card-border: var(--color-border-strong);
+}
+.card[data-emphasis="strong"] .card__title {
+  font-size: var(--text-xl);
+  line-height: var(--leading-heading);
+}
+.card[data-emphasis="strong"] .card__value {
+  font-size: var(--text-5xl);
+}
+
+/* Media: flush to the card edge; the body is padded only when the card
+   has a surface or border to hold it */
+.card:is(.card--media, [data-media="top"], [data-media="side"]):not(
+    [data-media="none"]
+  ) {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+.card:is(.card--media, [data-media="top"], [data-media="side"]):not(
+    [data-media="none"]
+  )
+  > .card__media {
+  border-radius: 0;
+}
+.card:is(.card--media, [data-media="top"], [data-media="side"]):not(
+    [data-media="none"]
+  )
+  > .card__body {
+  padding: var(--space-400) var(--card-pad) var(--card-pad);
+}
+.card--media:not([data-surface]):not([data-border]):not(.card--action):not(
+    [data-interactive="true"]
+  )
+  > .card__body {
+  padding-inline: 0;
+}
+
+/* Horizontal: media or content side by side from 480px */
+@media (min-width: 480px) {
+  .card:is([data-orientation="horizontal"], [data-media="side"]) {
+    flex-direction: row;
+    align-items: stretch;
+  }
+  .card:is([data-orientation="horizontal"], [data-media="side"])
+    > .card__media {
+    flex: 0 0 38%;
+    max-width: 38%;
+  }
+  .card:is([data-orientation="horizontal"], [data-media="side"])
+    > .card__media.media-placeholder {
+    aspect-ratio: auto;
+    min-height: 100%;
+  }
+  .card[data-orientation="horizontal"]:not([data-media="side"]):not(
+      .card--media
+    ) {
+    align-items: center;
+  }
+  .card:is([data-orientation="horizontal"], [data-media="side"]) > .card__cue {
+    margin-top: 0;
+    margin-left: auto;
+    align-self: center;
+    flex: none;
+  }
+}
+
+/* ---- Interaction (action cards, and any card with data-interactive) - */
+.card:is(.card--action, [data-interactive="true"]) {
+  cursor: pointer;
+}
+.card:is(.card--action, [data-interactive="true"]):is(:hover, .is-hover) {
+  --card-border: var(--color-border-strong);
+}
+.card__link {
+  color: inherit;
+  text-decoration: none;
+}
+.card__link::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+}
+/* Any other control inside the card stays reachable above the stretched link */
+.card
+  :where(a[href], button, input, select, textarea, summary):not(.card__link) {
+  position: relative;
+  z-index: 1;
+}
+.card:is(.card--action, [data-interactive="true"]):is(:hover, .is-hover)
+  .card__link {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+@supports selector(:has(a)) {
+  .card__link:focus-visible {
+    outline: none;
+  }
+  .card:has(.card__link:focus-visible) {
+    outline: var(--focus-width) solid var(--color-border-focus);
+    outline-offset: var(--focus-offset);
+  }
+}
+.card.is-focus {
+  outline: var(--focus-width) solid var(--color-border-focus);
+  outline-offset: var(--focus-offset);
+}
+
+/* =====================================================================
+   PANEL (§18)
+   ===================================================================== */
+.panel {
+  padding: var(--space-600);
+  background: var(--color-bg-subtle);
+  border-radius: var(--radius-surface-lg);
+}
+@media (min-width: 768px) {
+  .panel {
+    padding: var(--space-700);
+  }
+}
+
+/* =====================================================================
+   ALERT (§19)
+   ===================================================================== */
+.alert {
+  --alert-color: var(--color-status-info);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: var(--space-300);
+  padding: var(--space-400);
+  border: var(--border-1) solid var(--alert-color);
+  border-left-width: var(--border-4);
+  border-radius: var(--radius-surface);
+  background: var(--color-status-info-bg);
+}
+@media (min-width: 768px) {
+  .alert {
+    padding: var(--space-500);
+  }
+}
+.alert__icon {
+  width: var(--size-icon-lg);
+  height: var(--size-icon-lg);
+  color: var(--alert-color);
+}
+.alert__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-100);
+  min-width: 0;
+}
+.alert__title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-body);
+}
+.alert__actions {
+  margin-top: var(--space-300);
+}
+.alert__close {
+  margin: calc(-1 * var(--space-300)) calc(-1 * var(--space-300)) 0 0;
+}
+.alert--success {
+  --alert-color: var(--color-status-success);
+  background: var(--color-status-success-bg);
+}
+.alert--warning {
+  --alert-color: var(--color-status-warning);
+  background: var(--color-status-warning-bg);
+}
+.alert--error {
+  --alert-color: var(--color-status-error);
+  background: var(--color-status-error-bg);
+}
+.alert[hidden] {
+  display: none;
+}
+
+/* =====================================================================
+   BREADCRUMBS (§20)
+   ===================================================================== */
+.breadcrumbs__list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-200);
+  font-size: var(--text-sm);
+}
+.breadcrumbs__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-200);
+}
+.breadcrumbs__item + .breadcrumbs__item::before {
+  content: none;
+}
+.breadcrumbs__sep {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+  color: var(--color-text-muted);
+}
+.breadcrumbs__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
+  color: var(--color-link);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.breadcrumbs__link:hover {
+  text-decoration-thickness: 2px;
+}
+.breadcrumbs__current {
+  font-weight: var(--weight-bold);
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
+}
+.breadcrumbs__ellipsis {
+  display: inline-flex;
+}
+@media (max-width: 479.98px) {
+  .breadcrumbs__item--collapse {
+    display: none;
+  }
+}
+@media (min-width: 480px) {
+  .breadcrumbs__ellipsis {
+    display: none;
+  }
+}
+
+/* =====================================================================
+   ACCORDION (§21)
+   ===================================================================== */
+.accordion {
+  border-top: var(--border-1) solid var(--color-border-subtle);
+}
+.accordion__item {
+  border-bottom: var(--border-1) solid var(--color-border-subtle);
+}
+.accordion__heading {
+  font-size: var(--text-md);
+}
+.accordion__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-400);
+  width: 100%;
+  min-height: var(--field-height);
+  padding: var(--space-300) 0;
+  border: 0;
+  background: none;
+  color: var(--color-text);
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-label);
+  text-align: left;
+  cursor: pointer;
+}
+.accordion__trigger:hover > span {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.accordion__icon {
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  transition: transform var(--motion-default) var(--ease-standard);
+}
+.accordion__trigger[aria-expanded="true"] .accordion__icon {
+  transform: rotate(180deg);
+}
+.accordion__panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition:
+    grid-template-rows var(--motion-default) var(--ease-standard),
+    visibility 0s linear var(--motion-default);
+}
+.accordion__item[data-open] .accordion__panel {
+  grid-template-rows: 1fr;
+  visibility: visible;
+  transition:
+    grid-template-rows var(--motion-default) var(--ease-standard),
+    visibility 0s;
+}
+.accordion__panel-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+/* Where hidden="until-found" hides closed content (see ui.js), visibility
+   must not, or find-in-page could not reach it. A find opens the item
+   without animation so the browser scrolls to the final position. */
+.accordion[data-until-found] .accordion__panel {
+  visibility: visible;
+  transition: grid-template-rows var(--motion-default) var(--ease-standard);
+}
+.accordion__item[data-instant] .accordion__panel {
+  transition: none;
+}
+.accordion__content {
+  padding-bottom: var(--space-600);
+}
+.accordion--padded .accordion__trigger {
+  padding-inline: var(--space-400);
+}
+.accordion--padded .accordion__content {
+  padding-inline: var(--space-400);
+}
+
+/* =====================================================================
+   CURRENT / SELECTED INDICATOR BAR
+   4px bar under (tabs, desktop navigation) or left of (menus) the current
+   item. It stops --space-100 (0.25rem, 4px at default text size) short of
+   both ends, so neighbouring bars and the item's corners never touch. rem
+   keeps the inset in proportion when users enlarge text. Drawn as ::after, so it survives forced
+   colors (box-shadow does not; see the end of this file).
+   ===================================================================== */
+.tabs__tab,
+.site-nav__link,
+.site-nav__toggle,
+.app-header__nav a {
+  position: relative;
+}
+
+/* =====================================================================
+   TABS (§22)
+   ===================================================================== */
+.tabs__list {
+  display: flex;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  box-shadow: inset 0 -1px 0 var(--color-border-subtle);
+}
+.tabs__tab {
+  flex: none;
+  min-height: var(--target-min);
+  padding: 0 var(--space-400);
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard);
+}
+.tabs__tab:hover {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
+}
+.tabs__tab[aria-selected="true"] {
+  color: var(--color-text);
+}
+.tabs__tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  inset: auto var(--space-100) 0 var(--space-100);
+  width: auto;
+  height: 4px;
+  background: var(--color-text);
+}
+.tabs__tab:focus-visible {
+  outline-offset: var(--focus-offset-inset);
+}
+.tabs__panel {
+  padding-top: var(--space-600);
+}
+.tabs__panel:focus-visible {
+  outline-offset: 4px;
+}
+
+/* =====================================================================
+   PAGINATION (§23)
+   ===================================================================== */
+.pagination__list {
+  display: flex;
+  align-items: center;
+  gap: var(--space-100);
+  flex-wrap: wrap;
+}
+/* Every slot (page, gap, prev, next) has the same width, sized for the widest
+   page number of this list (--page-digits is set by the script). Together
+   with a constant slot count this keeps the arrows in place while paging. */
+.pagination__link,
+.pagination__gap {
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: max(
+    var(--target-min),
+    calc(var(--page-digits, 2) * 1ch + 2 * var(--space-200) + 2px)
+  );
+  height: var(--target-min);
+  padding: 0;
+  border-radius: var(--radius-control);
+  color: var(--color-text);
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+.pagination__link {
+  border: var(--border-1) solid transparent;
+}
+.pagination__link:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-control);
+}
+.pagination__link[aria-current="page"] {
+  background: var(--color-action-primary-bg);
+  color: var(--color-action-primary-fg);
+  font-weight: var(--weight-bold);
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+.pagination__link[aria-disabled="true"] {
+  color: var(--color-disabled-fg);
+  pointer-events: none;
+}
+/* Compact status keeps the width of its longest possible text
+   ("Page 12 of 12"), so the next arrow never moves on narrow screens either */
+.pagination__status {
+  display: inline-grid;
+  justify-items: center;
+  padding-inline: var(--space-300);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pagination__status > * {
+  grid-area: 1 / 1;
+}
+.pagination__sizer {
+  visibility: hidden;
+}
+/* Narrow: prev · "Page x of y" · next */
+.pagination__item--page,
+.pagination__item--gap {
+  display: none;
+}
+@media (min-width: 480px) {
+  .pagination__item--page,
+  .pagination__item--gap {
+    display: list-item;
+  }
+  .pagination__item--status {
+    display: none;
+  }
+}
+
+/* =====================================================================
+   TABLE (§24) — only the wrapper scrolls, never the page
+   ===================================================================== */
+.table-wrap {
+  overflow-x: auto;
+}
+.table-wrap:focus-visible {
+  outline-offset: 2px;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-md);
+}
+.table caption {
+  text-align: left;
+  padding-bottom: var(--space-300);
+  font-weight: var(--weight-bold);
+}
+.table th,
+.table td {
+  padding: var(--space-300) var(--space-400);
+  border-bottom: var(--border-1) solid var(--color-border-subtle);
+  text-align: left;
+  vertical-align: top;
+}
+.table :is(th, td):first-child {
+  padding-left: 0;
+}
+.table :is(th, td):last-child {
+  padding-right: 0;
+}
+.table thead th {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  white-space: nowrap;
+  border-bottom: var(--border-2) solid var(--color-border-control);
+}
+.table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* =====================================================================
+   STATUS BADGE (supporting; used in tables and cards)
+   ===================================================================== */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-100);
+  padding: 0 var(--space-200);
+  border: var(--border-1) solid currentColor;
+  border-radius: var(--radius-control);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  line-height: 1.5rem;
+  max-width: 100%; /* a long status wraps instead of widening its column (R-70) */
+  overflow-wrap: anywhere;
+}
+.table .badge {
+  white-space: nowrap;
+} /* tables scroll inside their wrapper */
+.badge .icon {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+}
+.badge--success {
+  color: var(--color-status-success);
+  background: var(--color-status-success-bg);
+}
+.badge--warning {
+  color: var(--color-status-warning);
+  background: var(--color-status-warning-bg);
+}
+.badge--error {
+  color: var(--color-status-error);
+  background: var(--color-status-error-bg);
+}
+.badge--info {
+  color: var(--color-status-info);
+  background: var(--color-status-info-bg);
+}
+.badge--neutral {
+  color: var(--color-text);
+  background: var(--color-bg-subtle);
+  border-color: var(--color-border-subtle);
+}
+
+/* Count on a navigation item: the neutral badge, sized for a number */
+.badge--count {
+  justify-content: center;
+  min-width: 1.5rem;
+  color: var(--color-text);
+  background: var(--color-bg-subtle);
+  border-color: var(--color-border-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+/* =====================================================================
+   DIALOG (§28) — native <dialog>; bottom sheet on mobile
+   ===================================================================== */
+.dialog {
+  width: 100%;
+  max-width: 100%;
+  max-height: 90dvh;
+  margin: auto 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-overlay) var(--radius-overlay) 0 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  box-shadow: var(--shadow-overlay);
+  overscroll-behavior: contain;
+}
+.dialog[open] {
+  animation: dialog-in var(--motion-slow) var(--ease-standard);
+}
+.dialog::backdrop {
+  background: var(--color-backdrop);
+}
+.dialog__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-400);
+  padding: var(--space-600);
+  padding-bottom: calc(var(--space-600) + env(safe-area-inset-bottom, 0px));
+}
+.dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-400);
+}
+.dialog__title {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-label);
+  padding-top: var(--space-200);
+}
+.dialog__close {
+  margin: 0 calc(-1 * var(--space-200)) 0 0;
+}
+.dialog__actions {
+  margin-top: var(--space-200);
+}
+@media (min-width: 768px) {
+  .dialog {
+    width: calc(100% - 2 * var(--page-gutter));
+    max-width: 40rem;
+    max-height: calc(100dvh - 4rem);
+    margin: auto;
+    border-radius: var(--radius-overlay);
+  }
+  .dialog__inner {
+    padding: var(--space-600);
+  }
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(1rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+:root:has(.dialog[open]) {
+  overflow: hidden;
+}
+
+/* =====================================================================
+   LOADING (§30)
+   ===================================================================== */
+.spinner {
+  display: inline-block;
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  flex: none;
+  border: 2px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-top-color: currentColor;
+  border-radius: var(--radius-round);
+  animation: spin 0.8s linear infinite;
+}
+.spinner--lg {
+  width: var(--size-icon-xl);
+  height: var(--size-icon-xl);
+  border-width: 3px;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Spinner communicates status, so it keeps moving — only slower. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2.4s;
+  }
+}
+:root[data-motion="reduce"] .spinner {
+  animation-duration: 2.4s;
+}
+
+.skeleton {
+  display: block;
+  border-radius: var(--radius-control);
+  background: linear-gradient(
+    90deg,
+    var(--color-skeleton) 0 40%,
+    var(--color-skeleton-highlight) 50%,
+    var(--color-skeleton) 60% 100%
+  );
+  background-size: 300% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+.skeleton--text {
+  height: 1em;
+  margin-block: 0.25em;
+}
+.skeleton--title {
+  height: 1.5rem;
+  width: 60%;
+}
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+:root[data-motion="reduce"] .skeleton {
+  animation: none;
+}
+
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-200);
+}
+.progress__bar {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 0.5rem;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--color-bg-subtle);
+  box-shadow: inset 0 0 0 1px var(--color-border-subtle);
+  overflow: hidden;
+  color: var(--color-text);
+}
+.progress__bar::-webkit-progress-bar {
+  background: transparent;
+}
+.progress__bar::-webkit-progress-value {
+  background: var(--color-text);
+  border-radius: var(--radius-control);
+  transition: width var(--motion-default) var(--ease-standard);
+}
+.progress__bar::-moz-progress-bar {
+  background: var(--color-text);
+  border-radius: var(--radius-control);
+}
+.progress__meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0 var(--space-300);
+  font-size: var(--text-sm);
+}
+.progress__meta > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+} /* long file names break; the value wraps below when needed */
+
+/* =====================================================================
+   EMPTY STATE (§31)
+   ===================================================================== */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-300);
+  padding: var(--space-700) var(--space-500);
+  text-align: center;
+  border: var(--border-1) dashed var(--color-border-control);
+  border-radius: var(--radius-surface);
+}
+.empty-state__icon {
+  display: grid;
+  place-items: center;
+  color: var(--color-text-muted);
+}
+.empty-state__icon .icon {
+  width: var(--size-icon-xl);
+  height: var(--size-icon-xl);
+}
+.empty-state__title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+.empty-state__text {
+  max-width: 44ch;
+  color: var(--color-text-muted);
+}
+.empty-state .btn-group {
+  margin-top: var(--space-200);
+  justify-content: center;
+}
+
+/* Indicator bars in forced colors (declared last so it wins) */
+@media (forced-colors: active) {
+  .tabs__tab[aria-selected="true"]::after {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
+  /* Both border colours would become CanvasText: a full ring that shows no motion */
+  .spinner {
+    forced-color-adjust: none;
+    border-color: transparent;
+    border-top-color: CanvasText;
+  }
+}
