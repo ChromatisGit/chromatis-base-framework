@@ -245,6 +245,12 @@
   .shell--collapsed .shell__sidebar {
     width: var(--sidebar-rail-width);
   }
+  /* A column, so an optional footer can sit at the bottom */
+  .shell__sidebar:has(> .shell__sidebar-footer) {
+    display: flex;
+    flex-direction: column;
+    padding-bottom: var(--space-300);
+  }
   .shell__sidebar .section-nav {
     width: calc(var(--sidebar-width) - 2 * var(--space-300) - var(--border-1));
   }
@@ -608,4 +614,19 @@
     animation: none;
     transition: none;
   }
+}
+
+/* Sidebar footer slot: a control pinned to the bottom of the sidebar */
+.shell__sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-200);
+  margin-top: auto;
+  padding-top: var(--space-400);
+  border-top: var(--border-1) solid var(--color-border-subtle);
+}
+.shell__sidebar-footer-label {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }

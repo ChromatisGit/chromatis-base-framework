@@ -573,6 +573,75 @@
 }
 
 /* =====================================================================
+   SWITCH — an immediate on/off setting
+   ===================================================================== */
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-200);
+  min-height: var(--target-min);
+  cursor: pointer;
+  line-height: var(--leading-label);
+}
+.switch__input {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  width: calc(var(--choice-size) * 1.9);
+  height: var(--choice-size);
+  margin: 0;
+  border: var(--border-2) solid var(--color-border-control);
+  border-radius: var(--radius-round);
+  background: var(--color-bg);
+  cursor: inherit;
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+.switch__input::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: calc(var(--choice-size) - 8px);
+  height: calc(var(--choice-size) - 8px);
+  border-radius: var(--radius-round);
+  background: var(--color-border-control);
+  transform: translateY(-50%);
+  transition:
+    transform var(--motion-fast) var(--ease-standard),
+    background-color var(--motion-fast) var(--ease-standard);
+}
+.switch__input:checked {
+  background: var(--color-action-primary-bg);
+  border-color: var(--color-action-primary-bg);
+}
+.switch__input:checked::before {
+  background: var(--color-action-primary-fg);
+  transform: translate(calc(var(--choice-size) * 0.9), -50%);
+}
+.switch__input:focus-visible {
+  outline: var(--focus-width) solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+.switch:has(.switch__input:disabled) {
+  cursor: not-allowed;
+  color: var(--color-disabled-fg);
+}
+@media (forced-colors: active) {
+  .switch__input:checked {
+    background: Highlight;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .switch__input,
+  .switch__input::before {
+    transition: none;
+  }
+}
+
+/* =====================================================================
    PLACEHOLDER MEDIA — theme-aware, no network requests
    ===================================================================== */
 .media-placeholder {

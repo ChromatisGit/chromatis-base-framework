@@ -47,8 +47,8 @@ application-owned settings control. It persists per application and keeps
 multiple controls in sync. A light-only application omits the control and dark
 selectors.
 
-The shared UI exports Button, ActionLink, TextLink, IconButton, Card and its content
-parts, Badge, Alert, fields, the React Router Form wrapper, Page, Tabs, Accordion,
+The shared UI exports Button (and `buttonClassName` for button-styled links), ActionLink, TextLink, IconButton, Card and its content
+parts, Badge, Alert, fields, Choice and ChoiceGroup (checkbox and radio), Switch, the React Router Form wrapper, Page, Tabs, Accordion,
 Dialog, Pagination, DataTable, record list parts, Spinner, Skeleton, Progress, and
 EmptyState, SiteShell, Breadcrumbs, PageHeader, and service/editorial compositions. Dialog uses native modal behavior and becomes a bottom sheet on narrow
 screens. Pagination takes real page URLs, so links work with browser navigation;
@@ -62,6 +62,8 @@ the mobile menu on Escape or navigation, and can remember the sidebar choice
 under an application-specific storage key. For an unlisted detail route, pass
 `currentParentTo` to mark its listed parent. Bottom navigation is omitted by
 default. Applications supply three to five shortcuts when they use it.
+`sidebarFooter` pins a control (`{ compact, full }`) to the bottom of the
+sidebar; phones have no sidebar, so repeat it in `quickActions`.
 
 ```tsx
 <SiteShell
