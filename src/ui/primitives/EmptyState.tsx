@@ -3,7 +3,8 @@ import { cn } from "./cn.js";
 
 export interface EmptyStateProps extends HTMLAttributes<HTMLDivElement> {
   title: string;
-  description?: ReactNode;
+  description: string;
+  nextStep: string;
   icon?: ReactNode;
   actions?: ReactNode;
 }
@@ -11,6 +12,7 @@ export interface EmptyStateProps extends HTMLAttributes<HTMLDivElement> {
 export function EmptyState({
   title,
   description,
+  nextStep,
   icon,
   actions,
   className,
@@ -24,7 +26,8 @@ export function EmptyState({
         </span>
       )}
       <h2 className="empty-state__title">{title}</h2>
-      {description && <p className="empty-state__text">{description}</p>}
+      <p className="empty-state__text">{description}</p>
+      <p className="empty-state__text">{nextStep}</p>
       {actions && <div className="btn-group">{actions}</div>}
     </div>
   );

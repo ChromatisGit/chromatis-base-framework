@@ -37,9 +37,9 @@ export function TextAreaField({
         rows={4}
         disabled={isPending || disabled}
         className={cn("textarea", className)}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={fieldDescription(fieldId, hint, error, describedBy)}
         {...props}
+        aria-invalid={error ? true : props["aria-invalid"]}
+        aria-describedby={fieldDescription(fieldId, hint, error, describedBy)}
       />
     </FieldFrame>
   );

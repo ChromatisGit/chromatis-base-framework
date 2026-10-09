@@ -11,6 +11,12 @@ import {
   type SetupQueryExecutor,
 } from "../../src/db/setup.js";
 import type { MigrationAsset } from "../../src/db/types.js";
+import { createAuthDatabase } from "../../src/auth/database.server.js";
+import {
+  loginUser,
+  registerUser,
+  setUserEnabled,
+} from "../../src/auth/users.server.js";
 import { startDatabase } from "./dbMigrations.ts";
 
 const adminPassword = "admin-test-password";
@@ -24,6 +30,7 @@ let containerName = "";
 let applicationRoot = "";
 let adminUrl = "";
 let runtimeUrl = "";
+let authUrl = "";
 let migrationUrl = "";
 
 function docker(args: string[], allowFailure = false): string {
@@ -111,21 +118,24 @@ beforeAll(async () => {
   }
 
   adminUrl = `postgres://postgres:${adminPassword}@127.0.0.1:${port}/${databaseName}`;
-  runtimeUrl = `postgres://chromatis_app:${runtimePassword}@127.0.0.1:${port}/${databaseName}`;
-  migrationUrl = `postgres://chromatis_migrator:${migrationPassword}@127.0.0.1:${port}/${databaseName}`;
+  runtimeUrl = `postgres://chromatis_runtime:${runtimePassword}@127.0.0.1:${port}/${databaseName}`;
+  authUrl = `postgres://chromatis_auth:auth-test-password@127.0.0.1:${port}/${databaseName}`;
+  migrationUrl = `postgres://chromatis_owner:${migrationPassword}@127.0.0.1:${port}/${databaseName}`;
 
   const admin = postgres(adminUrl, { max: 1 });
   try {
     await admin.unsafe(`
-      CREATE ROLE chromatis_migrator LOGIN PASSWORD '${migrationPassword}'
+      CREATE ROLE chromatis_owner LOGIN PASSWORD '${migrationPassword}'
         NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
-      CREATE ROLE chromatis_app LOGIN PASSWORD '${runtimePassword}'
+      CREATE ROLE chromatis_runtime LOGIN PASSWORD '${runtimePassword}'
         NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
-      ALTER DATABASE ${databaseName} OWNER TO chromatis_migrator;
+      CREATE ROLE chromatis_auth LOGIN PASSWORD 'auth-test-password'
+        NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+      ALTER DATABASE ${databaseName} OWNER TO chromatis_owner;
       REVOKE CREATE ON SCHEMA public FROM PUBLIC;
-      ALTER SCHEMA public OWNER TO chromatis_migrator;
-      GRANT CONNECT ON DATABASE ${databaseName} TO chromatis_app;
-      GRANT USAGE ON SCHEMA public TO chromatis_app;
+      ALTER SCHEMA public OWNER TO chromatis_owner;
+      GRANT CONNECT ON DATABASE ${databaseName} TO chromatis_runtime, chromatis_auth;
+      GRANT USAGE ON SCHEMA public TO chromatis_runtime;
     `);
   } finally {
     await admin.end();
@@ -144,7 +154,7 @@ beforeAll(async () => {
         USING (user_id = NULLIF(current_setting('app.user_id', true), '')::uuid)
         WITH CHECK (user_id = NULLIF(current_setting('app.user_id', true), '')::uuid);
       REVOKE ALL ON TABLE courses FROM PUBLIC;
-      GRANT SELECT, INSERT ON TABLE courses TO chromatis_app;
+      GRANT SELECT, INSERT ON TABLE courses TO chromatis_runtime;
     `,
   );
 
@@ -174,7 +184,7 @@ describe("PostgreSQL database contract", () => {
       environment: "local",
       migrationConnectionString: migrationUrl,
     });
-    const [runtimeRole] = await database.anonSQL<
+    const [runtimeRole] = await database.publicSQL<
       Array<{ role_name: string; superuser: boolean; bypass_rls: boolean }>
     >`
       SELECT current_user AS role_name, rolsuper AS superuser, rolbypassrls AS bypass_rls
@@ -191,17 +201,17 @@ describe("PostgreSQL database contract", () => {
         ORDER BY tablename
       `;
       expect(runtimeRole).toEqual({
-        role_name: "chromatis_app",
+        role_name: "chromatis_runtime",
         superuser: false,
         bypass_rls: false,
       });
-      expect(owners).toEqual([
+      expect([...owners]).toEqual([
         {
           tablename: "chromatis_schema_migrations",
-          tableowner: "chromatis_migrator",
+          tableowner: "chromatis_owner",
         },
-        { tablename: "courses", tableowner: "chromatis_migrator" },
-        { tablename: "users", tableowner: "chromatis_migrator" },
+        { tablename: "courses", tableowner: "chromatis_owner" },
+        { tablename: "users", tableowner: "chromatis_owner" },
       ]);
     } finally {
       await admin.end();
@@ -233,7 +243,7 @@ describe("PostgreSQL database contract", () => {
     expect(context).toEqual([
       { user_id: userA, user_role: null, permission: null },
     ]);
-    expect(await database.anonSQL`SELECT id FROM courses`).toEqual([]);
+    expect(await database.publicSQL`SELECT id FROM courses`).toEqual([]);
     expect(
       await database.userSQL({ id: userB })`SELECT id FROM courses`,
     ).toEqual([]);
@@ -263,6 +273,77 @@ describe("PostgreSQL database contract", () => {
   });
 });
 
+describe("SQL injection payloads stay values", () => {
+  test("payloads cannot alter app.user_id or reach another User's rows", async () => {
+    const database = createDatabase(runtimeUrl, {
+      runtime: "bun",
+      environment: "local",
+      migrationConnectionString: migrationUrl,
+    });
+    await database.userSQL({ id: userB })`
+      INSERT INTO courses (id, user_id, title)
+      VALUES ('10000000-0000-4000-8000-0000000000b1', ${userB}::uuid, 'Secret of B')
+    `;
+    const payloads: unknown[] = [
+      "' OR true --",
+      "x'; SELECT set_config('app.user_id', '" + userB + "', true); --",
+      `${userB}' OR user_id::text = '${userB}`,
+      "'; SET LOCAL app.user_id = '" + userB + "'; --",
+      "$1; DROP TABLE courses; --",
+      { kind: "fragment", text: "true OR 1=1", values: [] },
+      { kind: "fragment", text: `user_id = '${userB}'`, values: [] },
+      [userB, "' OR true --"],
+    ];
+    await database.userTransaction({ id: userA }, async (sql) => {
+      for (const payload of payloads) {
+        let rows: unknown[] = [];
+        try {
+          rows = await sql`SELECT title FROM courses WHERE title = ${payload}`;
+        } catch {
+          // a payload that cannot even be bound as a value is also fine
+        }
+        expect(rows).toEqual([]);
+        const [context] = await sql<Array<{ user_id: string }>>`
+          SELECT current_setting('app.user_id', true) AS user_id
+        `;
+        expect(context).toEqual({ user_id: userA });
+      }
+      const titles = await sql<
+        Array<{ title: string }>
+      >`SELECT title FROM courses`;
+      expect(titles.map((row) => row.title)).toEqual(["Visible"]);
+    });
+    // payloads used as the User ID itself are rejected, not interpreted
+    for (const payload of payloads) {
+      expect(
+        () => database.userSQL(payload as { id: string })`SELECT 1`,
+      ).toThrow();
+    }
+    // application SQL cannot set identity or switch roles even deliberately
+    await database.userTransaction({ id: userA }, async (sql) => {
+      for (const statement of [
+        () => sql`SELECT set_config('app.user_id', ${userB}, true)`,
+        () => sql`SET LOCAL app.user_id = 'x'`,
+        () => sql`SET LOCAL ROLE chromatis_owner`,
+        () => sql`RESET ROLE`,
+        () => sql`SET SESSION AUTHORIZATION chromatis_owner`,
+      ]) {
+        expect(statement).toThrow("reserved for the framework");
+      }
+      const [context] = await sql<Array<{ user_id: string }>>`
+        SELECT current_setting('app.user_id', true) AS user_id
+      `;
+      expect(context).toEqual({ user_id: userA });
+    });
+    // the identity does not leak across transactions on the pooled connection
+    expect(
+      await database.publicSQL<Array<{ user_id: string | null }>>`
+        SELECT nullif(current_setting('app.user_id', true), '') AS user_id
+      `,
+    ).toEqual([{ user_id: null }]);
+  });
+});
+
 describe("PostgreSQL auth and startup", () => {
   test("auth grants support required flows without exposing unneeded columns", async () => {
     const database = createDatabase(runtimeUrl, {
@@ -270,70 +351,67 @@ describe("PostgreSQL auth and startup", () => {
       environment: "local",
       migrationConnectionString: migrationUrl,
     });
-    const migrator = postgres(migrationUrl, { max: 1 });
-    try {
-      await migrator`
-        INSERT INTO roles (key, description) VALUES ('admin', 'Administrator')
-        ON CONFLICT DO NOTHING
-      `;
-      await migrator`
-        INSERT INTO permissions (key, description) VALUES ('courses.read', 'Read courses')
-        ON CONFLICT DO NOTHING
-      `;
-      await migrator`
-        INSERT INTO role_permissions (role_key, permission_key)
-        VALUES ('admin', 'courses.read') ON CONFLICT DO NOTHING
-      `;
-    } finally {
-      await migrator.end();
-    }
-    let authUserId = "";
-    await database.anonTransaction(async (sql) => {
-      await sql`
-        INSERT INTO users (username, pin_hash, enabled)
-        VALUES ('alice', 'hash', true)
-      `;
-      const users = await sql<Array<{ id: string }>>`
-        SELECT id FROM users WHERE username = 'alice'
-      `;
-      expect(users).toHaveLength(1);
-      const user = users[0];
-      if (!user) {
-        throw new Error("Expected the inserted auth user.");
-      }
-      authUserId = user.id;
-      await sql`
-        INSERT INTO roles (key, description) VALUES ('admin', 'Administrator')
-        ON CONFLICT DO NOTHING
-      `;
-      await sql`
-        INSERT INTO user_roles (user_id, role_key) VALUES (${user.id}::uuid, 'admin')
-        ON CONFLICT DO NOTHING
-      `;
-      await sql`
-        INSERT INTO sessions (id, user_id, expires_at)
-        VALUES ('20000000-0000-4000-8000-000000000001', ${user.id}::uuid, now() + interval '1 hour')
-      `;
-      expect(await sql`SELECT id FROM sessions`).toHaveLength(1);
-      await sql`DELETE FROM sessions WHERE id = '20000000-0000-4000-8000-000000000001'`;
-      await sql`
-        INSERT INTO external_identities
-          (provider, external_id, user_id, email, display_name, raw)
-        VALUES ('test', 'alice', ${user.id}::uuid, 'a@example.test', 'Alice', '{}'::jsonb)
-      `;
+    const auth = createAuthDatabase(authUrl, { runtime: "bun" });
+    const registered = await registerUser(auth, {
+      username: "alice",
+      pin: "1234",
     });
+    if (registered.status !== "registered") {
+      throw new Error("Expected the first user to be registered.");
+    }
+    const authUserId = registered.user.id;
+    expect(await registerUser(auth, { username: "bob", pin: "1234" })).toEqual({
+      status: "pending_approval",
+    });
+    expect(await registerUser(auth, { username: "alice", pin: "x" })).toEqual({
+      status: "username_taken",
+    });
+    expect(await loginUser(auth, "alice", "1234")).toEqual({
+      status: "ok",
+      user: { id: authUserId },
+    });
+    // enabling Users is administrators only
+    const bob = await auth.transaction(
+      (sql) =>
+        sql<Array<{ id: string }>>`SELECT id FROM users WHERE username = 'bob'`,
+    );
+    await expect(
+      setUserEnabled({ auth, database }, { id: bob[0]!.id }, bob[0]!.id, true),
+    ).rejects.toThrow("Role required: admin");
+    await setUserEnabled(
+      { auth, database },
+      { id: authUserId },
+      bob[0]!.id,
+      true,
+    );
 
     let deniedError: unknown;
     try {
-      await database.anonSQL`SELECT raw FROM external_identities`;
+      await database.publicSQL`SELECT raw FROM external_identities`;
     } catch (error) {
       deniedError = error;
     }
     expect(deniedError).toMatchObject({ code: "42501" });
-    const permission = await database.userSQL({ id: authUserId })<
-      Array<{ allowed: boolean }>
-    >`SELECT chromatis.has_permission(${authUserId}::uuid, 'courses.read') AS allowed`;
-    expect(permission).toEqual([{ allowed: true }]);
+    await expect(
+      database.userSQL({ id: authUserId })`
+        INSERT INTO user_roles (user_id, role_key) VALUES (${authUserId}::uuid, 'teacher')
+      `,
+    ).rejects.toMatchObject({ code: "42501" });
+    await expect(
+      database.publicSQL`INSERT INTO roles (key, description) VALUES ('x', 'x')`,
+    ).rejects.toMatchObject({ code: "42501" });
+    const identity = await database.userSQL({ id: authUserId })<
+      Array<{ user_id: string; admin: boolean; teacher: boolean }>
+    >`SELECT chromatis.current_user_id()::text AS user_id,
+             chromatis.has_role('admin') AS admin,
+             chromatis.has_role('teacher') AS teacher`;
+    expect(identity).toEqual([
+      { user_id: authUserId, admin: true, teacher: false },
+    ]);
+    const anonymous = await database.publicSQL<
+      Array<{ user_id: string | null; admin: boolean }>
+    >`SELECT chromatis.current_user_id() AS user_id, chromatis.has_role('admin') AS admin`;
+    expect(anonymous).toEqual([{ user_id: null, admin: false }]);
   });
 });
 
@@ -341,7 +419,7 @@ describe("PostgreSQL startup policy", () => {
   test("production checks pending migrations while test startup applies them", async () => {
     writeMigration(
       "0.0.2__add_production_probe.sql",
-      "CREATE TABLE production_probe (id integer PRIMARY KEY); GRANT SELECT ON production_probe TO chromatis_app;\n",
+      "CREATE TABLE production_probe (id integer PRIMARY KEY); GRANT SELECT ON production_probe TO chromatis_runtime;\n",
     );
     await expect(
       startDatabase({
@@ -373,7 +451,9 @@ describe("PostgreSQL startup policy", () => {
       runtime: "bun",
       environment: "production",
     });
-    expect(await database.anonSQL`SELECT id FROM production_probe`).toEqual([]);
+    expect(await database.publicSQL`SELECT id FROM production_probe`).toEqual(
+      [],
+    );
   });
 });
 
@@ -395,7 +475,9 @@ describe("PostgreSQL migration concurrency", () => {
         migrations: [migration],
         query: queryExecutor(sql),
         transaction: (operation) =>
-          sql.begin((transaction) => operation(queryExecutor(transaction))),
+          sql.begin((transaction) =>
+            operation(queryExecutor(transaction)),
+          ) as Promise<never>,
       });
     try {
       await Promise.all([run(first, "lock-first"), run(second, "lock-second")]);
@@ -403,7 +485,7 @@ describe("PostgreSQL migration concurrency", () => {
         SELECT count(*)::integer AS count FROM chromatis_schema_migrations
         WHERE module = 'lock-test' AND version = '1.0.0'
       `;
-      expect(markers).toEqual([{ count: 1 }]);
+      expect([...markers]).toEqual([{ count: 1 }]);
     } finally {
       await Promise.all([first.end(), second.end()]);
     }

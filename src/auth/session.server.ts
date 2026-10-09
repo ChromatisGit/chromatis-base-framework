@@ -4,7 +4,7 @@ import {
   getSessionCookie,
 } from "./cookie.server.js";
 import type { SessionCookieConfig } from "./cookie.server.js";
-import type { Database } from "../db/client.js";
+import type { AuthDatabase } from "./database.server.js";
 import type { Session, User } from "./types.js";
 
 const DEFAULT_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
@@ -21,7 +21,7 @@ export interface SessionManager {
 }
 
 export interface SessionManagerOptions {
-  readonly database: Database;
+  readonly auth: AuthDatabase;
   readonly cookieName: string;
   readonly maxAgeSeconds?: number;
   readonly secure?: boolean;
@@ -43,8 +43,8 @@ export function createSessionManager(
     path: "/",
   };
   const revoke = async (sessionId: string): Promise<void> => {
-    await options.database.anonTransaction(async (sql) => {
-      await sql`DELETE FROM sessions WHERE id = ${sessionId}`;
+    await options.auth.transaction(async (sql) => {
+      await sql`DELETE FROM auth_sessions WHERE id = ${sessionId}`;
     });
   };
 
@@ -52,9 +52,9 @@ export function createSessionManager(
     async create(user) {
       const id = createId();
       const expiresAt = new Date(now().getTime() + maxAge * 1_000);
-      await options.database.anonTransaction(async (sql) => {
+      await options.auth.transaction(async (sql) => {
         await sql`
-          INSERT INTO sessions (id, user_id, expires_at)
+          INSERT INTO auth_sessions (id, user_id, expires_at)
           VALUES (${id}, ${user.id}, ${expiresAt})
         `;
       });
@@ -68,25 +68,29 @@ export function createSessionManager(
       if (!id || !UUID_PATTERN.test(id)) {
         return null;
       }
-      const rows = await options.database.anonTransaction(
+      const rows = await options.auth.transaction(
         (sql) =>
           sql<Array<{ id: string; user_id: string; expires_at: Date }>>`
-          SELECT s.id, s.user_id, s.expires_at
-          FROM sessions s
-          JOIN users u ON u.id = s.user_id
-          WHERE s.id = ${id} AND s.expires_at > ${now()} AND u.enabled = true
-          LIMIT 1
-        `,
+            SELECT s.id, s.user_id, s.expires_at
+            FROM auth_sessions s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.id = ${id} AND s.expires_at > ${now()} AND u.enabled = true
+            LIMIT 1
+          `,
       );
       const row = rows[0];
       return row
-        ? { id: row.id, user: { id: row.user_id }, expiresAt: row.expires_at }
+        ? {
+            id: row.id,
+            user: { id: row.user_id },
+            expiresAt: row.expires_at,
+          }
         : null;
     },
     revoke,
     async revokeAll(user) {
-      await options.database.anonTransaction(async (sql) => {
-        await sql`DELETE FROM sessions WHERE user_id = ${user.id}`;
+      await options.auth.transaction(async (sql) => {
+        await sql`DELETE FROM auth_sessions WHERE user_id = ${user.id}`;
       });
     },
     async logout(session) {

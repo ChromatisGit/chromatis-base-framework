@@ -15,9 +15,9 @@ export type DatabaseEnvironment = "local" | "test" | "production";
 export type Transaction<T> = (sql: DbSql) => Promise<T>;
 
 export interface Database {
-  readonly anonSQL: DbSql;
+  readonly publicSQL: DbSql;
   userSQL(user: DatabaseUser): DbSql;
-  anonTransaction<T>(operation: Transaction<T>): Promise<T>;
+  publicTransaction<T>(operation: Transaction<T>): Promise<T>;
   userTransaction<T>(user: DatabaseUser, operation: Transaction<T>): Promise<T>;
 }
 
@@ -77,17 +77,25 @@ function validateCredentials(
   }
 }
 
+const USER_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function assertUser(user: DatabaseUser): DatabaseUser {
+  if (typeof user?.id !== "string" || !USER_ID_PATTERN.test(user.id)) {
+    throw new Error(
+      "[db] userSQL requires an authenticated User with a UUID id.",
+    );
+  }
+  return user;
+}
+
 function createSingleQuerySql(
   run: <T>(operation: Transaction<T>) => Promise<T>,
 ): DbSql {
   const fragments = createSqlTag(async () => []);
-  const sql = ((first: string | TemplateStringsArray, ...values: unknown[]) => {
-    if (typeof first === "string") {
-      return fragments(first);
-    }
-    return run((transaction) => transaction(first, ...values));
-  }) as DbSql;
-  sql.unsafe = fragments.unsafe;
+  const sql = ((first: TemplateStringsArray, ...values: unknown[]) =>
+    run((transaction) => transaction(first, ...values))) as DbSql;
+  sql.identifier = fragments.identifier;
   return sql;
 }
 
@@ -101,16 +109,19 @@ export function createDatabase(
       ? createWorkerAdapter(connectionString, options.migrationConnectionString)
       : createNodeAdapter(connectionString, options.migrationConnectionString);
 
-  const anonSQL = createSingleQuerySql((operation) =>
-    adapter.withAnonTx(operation),
+  const publicSQL = createSingleQuerySql((operation) =>
+    adapter.withPublicTx(operation),
   );
 
   const database: Database = {
-    anonSQL,
+    publicSQL,
     userSQL: (user) =>
-      createSingleQuerySql((operation) => adapter.withUserTx(user, operation)),
-    anonTransaction: (operation) => adapter.withAnonTx(operation),
-    userTransaction: (user, operation) => adapter.withUserTx(user, operation),
+      createSingleQuerySql((operation) =>
+        adapter.withUserTx(assertUser(user), operation),
+      ),
+    publicTransaction: (operation) => adapter.withPublicTx(operation),
+    userTransaction: (user, operation) =>
+      adapter.withUserTx(assertUser(user), operation),
   };
   databaseSetups.set(database, (migrations) => {
     const setupOptions: AdapterSetupOptions = {

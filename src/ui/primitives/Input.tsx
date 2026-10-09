@@ -32,9 +32,9 @@ export function Input({
       <input
         id={inputId}
         className={cn("input", className)}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={fieldDescription(inputId, hint, error, describedBy)}
         {...props}
+        aria-invalid={error ? true : props["aria-invalid"]}
+        aria-describedby={fieldDescription(inputId, hint, error, describedBy)}
       />
     </FieldFrame>
   );

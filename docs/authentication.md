@@ -1,8 +1,8 @@
 # Authentication flow
 
-## Requests and sessions
+## Requests and Auth Sessions
 
-Create one `SessionManager` for the application and wrap the application handler
+Auth Sessions (table `auth_sessions`) are separate from Runtime Instances and Classroom Sessions. Auth code connects through `createAuthDatabase(DATABASE_AUTH_URL, …)`, a separate database principal the application's `publicSQL`/`userSQL` credential cannot use. Create one `SessionManager({ auth, cookieName })` for the application and wrap the application handler
 with `withAuthentication(sessionManager, handler)`. The wrapper reads the opaque
 session cookie and resolves it before calling the handler. It passes a new frozen
 `AuthContext` to that request only; module code uses `requireUser(context)` and

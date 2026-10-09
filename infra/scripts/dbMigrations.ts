@@ -9,6 +9,7 @@ import {
   type DatabaseEnvironment,
   type DatabaseRuntime,
 } from "../../src/db/client.ts";
+import type { MigrationAsset } from "../../src/db/types.ts";
 import { closeNodeDatabasePools } from "../../src/db/client.node.ts";
 import {
   assertSafeRuntimeRole,
@@ -130,7 +131,7 @@ export async function startDatabase(
 export async function getPendingMigrations(
   databaseUrl: string,
   applicationRoot = process.cwd(),
-): Promise<readonly MigrationFile[]> {
+): Promise<readonly MigrationAsset[]> {
   const migrations = discoverApplicationMigrations(applicationRoot);
   const sql = postgres(databaseUrl, { max: 1 });
   const query = makeQueryExecutor(sql);

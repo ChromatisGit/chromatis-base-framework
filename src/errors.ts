@@ -42,6 +42,15 @@ export class PermissionDeniedError extends AppError {
   }
 }
 
+export class ConflictError extends AppError {
+  public constructor(
+    message = "Resource already exists",
+    options?: ErrorOptions,
+  ) {
+    super(message, "conflict", options);
+  }
+}
+
 export function errorResponse(error: unknown): Response {
   if (!(error instanceof AppError)) {
     return Response.json(
@@ -57,7 +66,9 @@ export function errorResponse(error: unknown): Response {
         ? 403
         : error instanceof NotFoundError
           ? 404
-          : 400;
+          : error instanceof ConflictError
+            ? 409
+            : 400;
   const details = error instanceof ValidationError ? error.details : undefined;
 
   return Response.json(

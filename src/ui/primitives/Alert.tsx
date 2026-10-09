@@ -3,6 +3,8 @@ import { cn } from "./cn.js";
 
 export interface AlertProps extends HTMLAttributes<HTMLDivElement> {
   status?: "info" | "success" | "warning" | "error";
+  /** Announce newly displayed messages; static notices stay out of live regions. */
+  live?: boolean;
   title?: string;
   icon?: ReactNode;
   actions?: ReactNode;
@@ -10,6 +12,7 @@ export interface AlertProps extends HTMLAttributes<HTMLDivElement> {
 
 export function Alert({
   status = "info",
+  live = false,
   title,
   icon,
   actions,
@@ -19,9 +22,9 @@ export function Alert({
 }: AlertProps) {
   return (
     <div
-      role={status === "error" ? "alert" : "status"}
       className={cn("alert", `alert--${status}`, className)}
       {...props}
+      role={live ? (status === "error" ? "alert" : "status") : undefined}
     >
       {icon && (
         <span className="alert__icon" aria-hidden="true">

@@ -48,14 +48,14 @@ export function Select({
         <select
           id={selectId}
           className={cn("select__control", className)}
-          aria-invalid={error ? true : undefined}
+          {...props}
+          aria-invalid={error ? true : props["aria-invalid"]}
           aria-describedby={fieldDescription(
             selectId,
             hint,
             error,
             describedBy,
           )}
-          {...props}
         >
           {placeholder && (
             <option value="" disabled>

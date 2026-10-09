@@ -99,17 +99,18 @@
   --btn-border: var(--color-action-primary-border-hover);
 }
 
-/* Secondary: 1px control border. Hover strengthens the border color only;
-   width and size never change, so nothing next to it moves. Pressed adds
-   the pressed background. */
+/* Secondary: 1px control border, 2px on hover. Padding compensates for
+   the border width, so the button's outer size stays the same. */
 .btn--secondary {
   --btn-bw: var(--border-1);
   --btn-border: var(--color-border-control);
 }
 .btn--secondary:is(:hover, .is-hover) {
+  --btn-bw: var(--border-2);
   --btn-border: var(--color-border-strong);
 }
 .btn--secondary:is(:active, .is-active) {
+  --btn-bw: var(--border-2);
   --btn-border: var(--color-border-strong);
   --btn-bg: var(--color-bg-pressed);
 }
@@ -325,6 +326,10 @@
   width: var(--size-icon-md);
   height: var(--size-icon-md);
   margin: 0;
+}
+.link[aria-current="page"] {
+  font-weight: var(--weight-bold);
+  text-decoration-thickness: var(--border-3);
 }
 
 /* =====================================================================
@@ -573,6 +578,75 @@
 }
 
 /* =====================================================================
+   SWITCH — an immediate on/off setting
+   ===================================================================== */
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-200);
+  min-height: var(--target-min);
+  cursor: pointer;
+  line-height: var(--leading-label);
+}
+.switch__input {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  width: calc(var(--choice-size) * 1.9);
+  height: var(--choice-size);
+  margin: 0;
+  border: var(--border-2) solid var(--color-border-control);
+  border-radius: var(--radius-round);
+  background: var(--color-bg);
+  cursor: inherit;
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+.switch__input::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: calc(var(--choice-size) - 8px);
+  height: calc(var(--choice-size) - 8px);
+  border-radius: var(--radius-round);
+  background: var(--color-border-control);
+  transform: translateY(-50%);
+  transition:
+    transform var(--motion-fast) var(--ease-standard),
+    background-color var(--motion-fast) var(--ease-standard);
+}
+.switch__input:checked {
+  background: var(--color-action-primary-bg);
+  border-color: var(--color-action-primary-bg);
+}
+.switch__input:checked::before {
+  background: var(--color-action-primary-fg);
+  transform: translate(calc(var(--choice-size) * 0.9), -50%);
+}
+.switch__input:focus-visible {
+  outline: var(--focus-width) solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+.switch:has(.switch__input:disabled) {
+  cursor: not-allowed;
+  color: var(--color-disabled-fg);
+}
+@media (forced-colors: active) {
+  .switch__input:checked {
+    background: Highlight;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .switch__input,
+  .switch__input::before {
+    transition: none;
+  }
+}
+
+/* =====================================================================
    PLACEHOLDER MEDIA — theme-aware, no network requests
    ===================================================================== */
 .media-placeholder {
@@ -621,13 +695,12 @@
                                                  genuinely important item
    data-border       none | default | strong
    data-orientation  vertical | horizontal       horizontal from 480px
-   data-interactive  true | false                action cards are always true
    data-media        none | top | side           side implies horizontal
    data-emphasis     default | strong            larger title / value
 
    Every card shares spacing, the surface radius, typography, focus and
-   hover. Interactive cards have one stretched link (.card__link); hover
-   strengthens the border and underlines the title — no shadow, no
+   hover. Action cards are one link; hover strengthens the border and
+   underlines the title — no shadow, no
    movement, no geometry change. Cards stay flat: elevation is for
    overlays only. Do not add new card components for visual differences;
    express them with these options.
@@ -765,10 +838,7 @@
   > .card__body {
   padding: var(--space-400) var(--card-pad) var(--card-pad);
 }
-.card--media:not([data-surface]):not([data-border]):not(.card--action):not(
-    [data-interactive="true"]
-  )
-  > .card__body {
+.card--media:not([data-surface]):not([data-border]) > .card__body {
   padding-inline: 0;
 }
 
@@ -801,42 +871,20 @@
   }
 }
 
-/* ---- Interaction (action cards, and any card with data-interactive) - */
-.card:is(.card--action, [data-interactive="true"]) {
+/* ---- Interaction (the action card is a single link) ---------------- */
+.card--action {
   cursor: pointer;
 }
-.card:is(.card--action, [data-interactive="true"]):is(:hover, .is-hover) {
+.card--action:is(:hover, .is-hover) {
   --card-border: var(--color-border-strong);
 }
-.card__link {
+.card--action {
   color: inherit;
   text-decoration: none;
 }
-.card__link::after {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-}
-/* Any other control inside the card stays reachable above the stretched link */
-.card
-  :where(a[href], button, input, select, textarea, summary):not(.card__link) {
-  position: relative;
-  z-index: 1;
-}
-.card:is(.card--action, [data-interactive="true"]):is(:hover, .is-hover)
-  .card__link {
+.card--action:is(:hover, .is-hover) .card__title {
   text-decoration: underline;
   text-underline-offset: 0.2em;
-}
-@supports selector(:has(a)) {
-  .card__link:focus-visible {
-    outline: none;
-  }
-  .card:has(.card__link:focus-visible) {
-    outline: var(--focus-width) solid var(--color-border-focus);
-    outline-offset: var(--focus-offset);
-  }
 }
 .card.is-focus {
   outline: var(--focus-width) solid var(--color-border-focus);
@@ -1011,33 +1059,10 @@
   transform: rotate(180deg);
 }
 .accordion__panel {
-  display: grid;
-  grid-template-rows: 0fr;
-  visibility: hidden;
-  transition:
-    grid-template-rows var(--motion-default) var(--ease-standard),
-    visibility 0s linear var(--motion-default);
+  display: none;
 }
 .accordion__item[data-open] .accordion__panel {
-  grid-template-rows: 1fr;
-  visibility: visible;
-  transition:
-    grid-template-rows var(--motion-default) var(--ease-standard),
-    visibility 0s;
-}
-.accordion__panel-inner {
-  overflow: hidden;
-  min-height: 0;
-}
-/* Where hidden="until-found" hides closed content (see ui.js), visibility
-   must not, or find-in-page could not reach it. A find opens the item
-   without animation so the browser scrolls to the final position. */
-.accordion[data-until-found] .accordion__panel {
-  visibility: visible;
-  transition: grid-template-rows var(--motion-default) var(--ease-standard);
-}
-.accordion__item[data-instant] .accordion__panel {
-  transition: none;
+  display: block;
 }
 .accordion__content {
   padding-bottom: var(--space-600);
@@ -1102,7 +1127,7 @@
   position: absolute;
   inset: auto var(--space-100) 0 var(--space-100);
   width: auto;
-  height: 4px;
+  height: var(--border-3);
   background: var(--color-text);
 }
 .tabs__tab:focus-visible {

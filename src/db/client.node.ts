@@ -1,6 +1,8 @@
 import postgres from "postgres";
 import {
+  assertSafeRole,
   assertSafeRuntimeRole,
+  DATABASE_RUNTIME_ROLE,
   ensureDatabaseReady,
   inspectDatabaseRole,
   type SetupQueryExecutor,
@@ -68,12 +70,15 @@ function makeTxSql(tx: postgres.TransactionSql): DbSql {
 export function createNodeAdapter(
   connectionString: string,
   migrationConnectionString?: string,
+  role: string = DATABASE_RUNTIME_ROLE,
 ): DbAdapter {
   const pool = getPool(connectionString);
   let runtimeRoleCheck: Promise<void> | undefined;
   const ensureSafeRuntimeRole = (): Promise<void> => {
-    runtimeRoleCheck ??= assertSafeRuntimeRole(
+    runtimeRoleCheck ??= assertSafeRole(
       makeSetupExecutor(pool as unknown as PostgresQueryable),
+      role,
+      "connection",
     ).catch((error: unknown) => {
       runtimeRoleCheck = undefined;
       throw error;
@@ -82,7 +87,7 @@ export function createNodeAdapter(
   };
 
   return {
-    async withAnonTx<T>(fn: (sql: DbSql) => Promise<T>): Promise<T> {
+    async withPublicTx<T>(fn: (sql: DbSql) => Promise<T>): Promise<T> {
       await ensureSafeRuntimeRole();
       return pool.begin(async (tx) => fn(makeTxSql(tx))) as Promise<T>;
     },

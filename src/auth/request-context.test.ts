@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { Database } from "../db/client.js";
+import type { AuthDatabase } from "./database.server.js";
 import { requireUser, withAuthentication } from "./request-context.js";
 import { createSessionManager } from "./session.server.js";
 import type { SessionManager } from "./session.server.js";
@@ -126,11 +126,11 @@ test("the middleware uses the same Fetch request interface for both runtimes", a
 
 test("missing and malformed session cookies are unauthenticated without querying PostgreSQL", async () => {
   const database = {
-    anonTransaction() {
+    transaction() {
       throw new Error("malformed cookie must not reach the database");
     },
-  } as unknown as Database;
-  const manager = createSessionManager({ database, cookieName: "sid" });
+  } as unknown as AuthDatabase;
+  const manager = createSessionManager({ auth: database, cookieName: "sid" });
 
   expect(await manager.resolve(new Request("https://app.test"))).toBeNull();
   expect(
@@ -151,13 +151,13 @@ test("missing and malformed session cookies are unauthenticated without querying
 
 test("the session cookie contains only the opaque session id", async () => {
   const database = {
-    async anonTransaction(operation: (sql: unknown) => Promise<unknown>) {
+    async transaction(operation: (sql: unknown) => Promise<unknown>) {
       const sql = () => Promise.resolve([]);
       return operation(sql);
     },
-  } as unknown as Database;
+  } as unknown as AuthDatabase;
   const manager = createSessionManager({
-    database,
+    auth: database,
     cookieName: "sid",
     createId: () => sessionA,
     now: () => new Date("2026-01-01T00:00:00.000Z"),

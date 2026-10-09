@@ -38,7 +38,8 @@ describe("migration discovery", () => {
     let startupError: unknown;
     try {
       await startDatabase({
-        databaseUrl: "postgres://chromatis_app:runtime@127.0.0.1:1/unreachable",
+        databaseUrl:
+          "postgres://chromatis_runtime:runtime@127.0.0.1:1/unreachable",
         runtime: "bun",
         environment: "production",
         applicationRoot: root,

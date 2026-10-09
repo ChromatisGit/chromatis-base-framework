@@ -1,5 +1,5 @@
 import { AppError } from "../errors.js";
-import type { Database } from "../db/client.js";
+import type { AuthDatabase } from "./database.server.js";
 import type { ExternalIdentity, SSOProvider } from "./types.js";
 
 const DEFAULT_ATTEMPT_TTL_SECONDS = 10 * 60;
@@ -411,24 +411,22 @@ export function createOidcProvider(
 }
 
 export function createDatabaseOidcAuthorizationAttemptStore(
-  database: Database,
+  auth: AuthDatabase,
 ): OidcAuthorizationAttemptStore {
   return {
     async save(attempt) {
-      await database.anonTransaction(async (sql) => {
+      await auth.transaction(async (sql) => {
+        await sql`DELETE FROM oidc_authorization_attempts WHERE expires_at <= now()`;
         await sql`
-          SELECT chromatis.store_oidc_authorization_attempt(
-            ${attempt.providerId},
-            ${attempt.stateHash},
-            ${attempt.nonce},
-            ${attempt.codeVerifier},
-            ${attempt.expiresAt}
-          )
+          INSERT INTO oidc_authorization_attempts
+            (provider, state_hash, nonce, code_verifier, expires_at)
+          VALUES
+            (${attempt.providerId}, ${attempt.stateHash}, ${attempt.nonce}, ${attempt.codeVerifier}, ${attempt.expiresAt})
         `;
       });
     },
     async consume(providerId, stateHash) {
-      return database.anonTransaction(async (sql) => {
+      return auth.transaction(async (sql) => {
         const rows = await sql<
           Array<{
             provider: string;
@@ -438,10 +436,9 @@ export function createDatabaseOidcAuthorizationAttemptStore(
             expires_at: Date | string;
           }>
         >`
-          SELECT provider, state_hash, nonce, code_verifier, expires_at
-          FROM chromatis.consume_oidc_authorization_attempt(
-            ${providerId}, ${stateHash}
-          )
+          DELETE FROM oidc_authorization_attempts
+          WHERE provider = ${providerId} AND state_hash = ${stateHash}
+          RETURNING provider, state_hash, nonce, code_verifier, expires_at
         `;
         const row = rows[0];
         return row

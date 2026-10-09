@@ -21,7 +21,7 @@ export default [
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ["infra/scripts/*.ts", "infra/*.d.ts"],
+          allowDefaultProject: ["infra/*.d.ts"],
           maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 16,
         },
         tsconfigRootDir: __dirname,
@@ -29,7 +29,12 @@ export default [
     },
   },
   {
-    files: ["eslint.config.js", "infra/**/*.js"],
+    // Framework internals, tooling and tests legitimately use raw SQL.
+    files: ["src/db/**", "infra/**", "**/*.test.{ts,tsx}"],
+    rules: { "chromatis/no-raw-sql": "off" },
+  },
+  {
+    files: ["eslint.config.js", "infra/**/*.js", "src/vite.js"],
     rules: {
       "@typescript-eslint/no-floating-promises": "off",
     },

@@ -1,11 +1,11 @@
-import type { Database } from "../db/client.js";
+import type { AuthDatabase } from "./database.server.js";
 import type { ExternalIdentity, User } from "./types.js";
 
 export async function resolveExternalIdentity(
-  database: Database,
+  auth: AuthDatabase,
   identity: ExternalIdentity,
 ): Promise<User> {
-  return database.anonTransaction(async (sql) => {
+  return auth.transaction(async (sql) => {
     await sql`
       SELECT pg_advisory_xact_lock(
         hashtextextended(
@@ -22,7 +22,6 @@ export async function resolveExternalIdentity(
     if (existing[0]) {
       return { id: existing[0].user_id };
     }
-
     const users = await sql<Array<{ id: string }>>`
       INSERT INTO users (enabled) VALUES (true) RETURNING id
     `;
@@ -30,7 +29,6 @@ export async function resolveExternalIdentity(
     if (!user) {
       throw new Error("Failed to create SSO user");
     }
-
     await sql`
       INSERT INTO external_identities
         (provider, external_id, user_id, email, display_name, raw)

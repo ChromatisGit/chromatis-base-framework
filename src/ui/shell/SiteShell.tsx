@@ -48,6 +48,10 @@ export interface SiteShellProps {
   utilities?: ReactNode;
   /** Compact equivalents of utilities for the phone masthead. */
   quickActions?: ReactNode;
+  /** Control pinned to the bottom of the sidebar; `compact` is shown while
+   * the sidebar is collapsed. Phones have no sidebar, so put the same
+   * control into `quickActions` as well. */
+  sidebarFooter?: ShellActionSlot;
   /** Three to five application-selected shortcuts. Omit to hide the bar. */
   bottomNavigation?: readonly NavigationItem[];
   /** A page absent from navigation can identify its listed parent. */
@@ -211,6 +215,7 @@ export function SiteShell({
   settings,
   utilities,
   quickActions,
+  sidebarFooter,
   bottomNavigation,
   currentParentTo,
   sidebarStorageKey,
@@ -396,32 +401,39 @@ export function SiteShell({
         )}
       >
         <aside className="shell__sidebar">
-          <button
-            className="shell__toggle"
-            type="button"
-            aria-expanded={sidebarOpen}
-            aria-controls={sidebarId}
-            aria-label={sidebarOpen ? labels.hideSidebar : labels.showSidebar}
-            onClick={toggleSidebar}
-          >
-            <span aria-hidden="true">
-              {sidebarOpen ? icons.sidebarOpen : icons.sidebarClosed}
-            </span>
-            <span className="shell__toggle-label">
-              {sidebarOpen ? labels.hideSidebar : labels.showSidebar}
-            </span>
-          </button>
-          <div id={sidebarId}>
-            <NavigationTree
-              items={navigation}
-              path={path}
-              parentPath={currentParentTo}
-              label={labels.navigation}
-              pagesIn={labels.pagesIn}
-              expandIcon={icons.expand}
-              compact={!sidebarOpen}
-            />
+          <div className="shell__sidebar-inner">
+            <button
+              className="shell__toggle"
+              type="button"
+              aria-expanded={sidebarOpen}
+              aria-controls={sidebarId}
+              aria-label={sidebarOpen ? labels.hideSidebar : labels.showSidebar}
+              onClick={toggleSidebar}
+            >
+              <span aria-hidden="true">
+                {sidebarOpen ? icons.sidebarOpen : icons.sidebarClosed}
+              </span>
+              <span className="shell__toggle-label">
+                {sidebarOpen ? labels.hideSidebar : labels.showSidebar}
+              </span>
+            </button>
+            <div id={sidebarId}>
+              <NavigationTree
+                items={navigation}
+                path={path}
+                parentPath={currentParentTo}
+                label={labels.navigation}
+                pagesIn={labels.pagesIn}
+                expandIcon={icons.expand}
+                compact={!sidebarOpen}
+              />
+            </div>
           </div>
+          {sidebarFooter && (
+            <div className="shell__sidebar-footer">
+              {sidebarOpen ? sidebarFooter.full : sidebarFooter.compact}
+            </div>
+          )}
         </aside>
         <div className="shell__main">
           <main id={mainId}>{children}</main>

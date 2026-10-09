@@ -11,8 +11,8 @@ export interface DbSql {
     strings: TemplateStringsArray,
     ...values: SqlQueryValue[]
   ): Promise<T>;
-  (identifier: string): SqlFragment;
-  unsafe(identifier: string): SqlFragment;
+  /** A validated, quoted identifier (table or column name); never raw SQL. */
+  identifier(name: string): SqlFragment;
 }
 
 export type DatabaseUser = Readonly<{ id: string }>;
@@ -25,7 +25,7 @@ export interface MigrationAsset {
 }
 
 export interface DbAdapter {
-  withAnonTx<T>(fn: (sql: DbSql) => Promise<T>): Promise<T>;
+  withPublicTx<T>(fn: (sql: DbSql) => Promise<T>): Promise<T>;
   withUserTx<T>(user: DatabaseUser, fn: (sql: DbSql) => Promise<T>): Promise<T>;
   runSetup(options: AdapterSetupOptions): Promise<void>;
 }
