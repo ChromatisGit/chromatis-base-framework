@@ -74,6 +74,9 @@ export async function createViteConfig() {
       ssr: { build: { outDir: path.join(root, "build/server") } },
     },
     resolve: {
+      alias: {
+        "chromatis-content": path.join(root, ".chromatis/build/content.ts"),
+      },
       dedupe: [
         "react",
         "react-dom",

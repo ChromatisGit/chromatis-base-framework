@@ -27,6 +27,7 @@ export const canonicalTsconfig = `{
   "extends": "@chromatis/base/infra/tsconfig",
   "compilerOptions": {
     "types": ["node", "bun", "vite/client"],
+    "paths": { "chromatis-content": ["./.chromatis/build/content.ts"] },
     "rootDirs": [".", "./.react-router/types"]
   },
   "include": ["app", "src", "server", ".react-router/types/**/*"]
