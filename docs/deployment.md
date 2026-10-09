@@ -42,6 +42,6 @@ Run `bun run secret` in an interactive terminal. It lists every secret the appli
 
 ## Stateful Runtime migrations
 
-The application commits `.chromatis-runtime-migrations.json`. On build, the framework compares the desired runtime class set with the classes recorded by the ledger. A change appends `v<N+1>` with sorted additions and deletions; it does not edit earlier entries. Rebuilding with the same definitions changes nothing. Review and commit the new ledger entry before deployment. A class rename deletes the old class and adds a new one; existing in-memory Runtime Instances are not preserved by this migration.
+The application commits `.chromatis/runtime-migrations.json` (older applications may still have `.chromatis-runtime-migrations.json`, which is read when the new file is absent). On build, the framework compares the desired runtime class set with the classes recorded by the ledger. A change appends `v<N+1>` with sorted additions and deletions; it does not edit earlier entries. Rebuilding with the same definitions changes nothing. Review and commit the new ledger entry before deployment. A class rename deletes the old class and adds a new one; existing in-memory Runtime Instances are not preserved by this migration.
 
 The Session Directory process is a separate deployable, outside this application deployment command. An application registers with it only when `DIRECTORY_URL`, `DIRECTORY_KEY`, and `PUBLIC_URL` are all present.

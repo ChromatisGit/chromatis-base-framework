@@ -92,7 +92,8 @@ export function repairTooling(root = process.cwd()): void {
   const ignore = existsSync(ignorePath) ? readFileSync(ignorePath, "utf8") : "";
   const additions = [
     "/react-router.config.ts",
-    "/.chromatis/",
+    "/.chromatis/*",
+    "!/.chromatis/runtime-migrations.json",
     "/.wrangler/",
   ].filter((line) => !ignore.split("\n").includes(line));
   if (additions.length) {

@@ -64,25 +64,31 @@ type Migration = {
 };
 type Ledger = { migrations: Migration[] };
 
+const LEDGER_FILE = ".chromatis/runtime-migrations.json";
+// Applications created before the ledger moved keep it here until rebuilt.
+const LEGACY_LEDGER_FILE = ".chromatis-runtime-migrations.json";
+
 export function migrationPlan(
   root: string,
   runtime: readonly string[],
   persist: boolean,
 ): Migration[] {
-  const file = path.join(root, ".chromatis-runtime-migrations.json");
-  const ledger: Ledger = existsSync(file)
-    ? (JSON.parse(readFileSync(file, "utf8")) as Ledger)
+  const file = path.join(root, LEDGER_FILE);
+  const legacy = path.join(root, LEGACY_LEDGER_FILE);
+  const source = existsSync(file) ? file : legacy;
+  const ledger: Ledger = existsSync(source)
+    ? (JSON.parse(readFileSync(source, "utf8")) as Ledger)
     : { migrations: [] };
   if (!Array.isArray(ledger.migrations)) {
     throw new Error(
-      "Invalid runtime migration ledger; restore .chromatis-runtime-migrations.json from Git and run bun run build",
+      `Invalid runtime migration ledger; restore ${LEDGER_FILE} from Git and run bun run build`,
     );
   }
   const current = new Set<string>();
   for (const [index, migration] of ledger.migrations.entries()) {
     if (migration.tag !== `v${index + 1}`) {
       throw new Error(
-        "Runtime migration tags are inconsistent; restore .chromatis-runtime-migrations.json from Git and run bun run build",
+        `Runtime migration tags are inconsistent; restore ${LEDGER_FILE} from Git and run bun run build`,
       );
     }
     for (const name of migration.new_classes ?? []) {
@@ -112,6 +118,7 @@ export function migrationPlan(
       ...(deleted.length ? { deleted_classes: deleted } : {}),
     });
     if (persist) {
+      mkdirSync(path.dirname(file), { recursive: true });
       writeFileSync(file, `${JSON.stringify(ledger, null, 2)}\n`);
     }
   }

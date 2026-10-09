@@ -1,5 +1,11 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { checkTooling, expectedTooling, repairTooling } from "./tooling.js";
@@ -53,8 +59,9 @@ test("runtime migrations append new tags without changing earlier entries", () =
 
 test("doctor input rejects a rewritten runtime migration tag", () => {
   const root = project();
+  mkdirSync(path.join(root, ".chromatis"), { recursive: true });
   writeFileSync(
-    path.join(root, ".chromatis-runtime-migrations.json"),
+    path.join(root, ".chromatis/runtime-migrations.json"),
     JSON.stringify({
       migrations: [{ tag: "v9", new_classes: ["Runtime_classroom"] }],
     }),
