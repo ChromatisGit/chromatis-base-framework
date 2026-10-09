@@ -156,8 +156,8 @@ Each owner keeps values in `config.toml` and a strict Zod schema in `config.ts`.
 
 Secrets are never TOML values. Declare them in `src/app/config/secrets.ts`
 or an owner-local `src/modules/*/secrets.ts`, beside the same project structure
-used for TOML configuration. `bun run secret set`, `status`, and `delete` use
-interactive target and secret selectors. Local values use the operating
+used for TOML configuration. `bun run secret` opens an interactive menu to
+set, replace and remove secrets. Local values use the operating
 system's credential store; production values use the project's Wrangler
 configuration. Status reports presence only, and values are accepted only
 through hidden terminal input.

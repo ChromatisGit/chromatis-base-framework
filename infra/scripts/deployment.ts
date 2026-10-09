@@ -22,6 +22,7 @@ import {
 import { printPlan } from "./deployPlan.js";
 import { smokeTest } from "./smoke.js";
 import { promptSecret } from "./secretPrompt.js";
+import { secretCommand } from "./secretCommand.js";
 import { materializeExternalRoutes } from "./routeMaterialize.js";
 
 const root = process.cwd();
@@ -73,7 +74,7 @@ async function credentials(prompt: boolean): Promise<Record<string, string>> {
       await Bun.secrets.set({ service: credentialService, name, value });
     }
     if (!value) {
-      throw new Error(`${name} missing; run bun run secret set ${name}`);
+      throw new Error(`${name} missing; run bun run secret`);
     }
     result[name] = value;
   }
@@ -99,7 +100,7 @@ async function checkCloudflare(values: Record<string, string>): Promise<void> {
   );
   if (!response.ok) {
     throw new Error(
-      "Cloudflare credentials or account failed validation; run bun run secret set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID",
+      "Cloudflare credentials or account failed validation; run bun run secret to define CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID",
     );
   }
 }
@@ -112,7 +113,7 @@ async function requiredSecrets(
   for (const name of names) {
     const value = await secretValue(service, name);
     if (!value) {
-      throw new Error(`${name} missing; run bun run secret set ${name}`);
+      throw new Error(`${name} missing; run bun run secret`);
     }
     result[name] = value;
   }
@@ -417,39 +418,11 @@ export async function main(): Promise<void> {
     return;
   }
   if (command === "secret") {
-    const [action, name] = args;
-    const app = loadApplication(root);
-    const valid = [
-      ...credentialNames,
-      ...app.secrets,
-      ...app.optionalSecrets,
-      ...(app.postgresql ? ["DATABASE_URL", "DATABASE_MIGRATION_URL"] : []),
-    ];
-    if (action === "status") {
-      for (const item of valid) {
-        console.info(
-          `${item}: ${(await secretValue(credentialNames.includes(item as (typeof credentialNames)[number]) ? credentialService : applicationService(app.name), item)) ? "configured" : "missing"}`,
-        );
-      }
-      return;
-    }
-    if (action !== "set" || !name || !valid.includes(name)) {
-      throw new Error(`usage: bun run secret set <${valid.join("|")}>`);
-    }
-    const value = await promptSecret(name);
-    if (!value || /[\r\n]/.test(value)) {
-      throw new Error("Secret must be nonempty and single line");
-    }
-    await Bun.secrets.set({
-      service: credentialNames.includes(
-        name as (typeof credentialNames)[number],
-      )
-        ? credentialService
-        : applicationService(app.name),
-      name,
-      value,
+    await secretCommand(args, loadApplication(root), {
+      credentialNames,
+      credentialService,
+      applicationService,
     });
-    console.info(`${name}: configured`);
     return;
   }
   const app = loadApplication(root);

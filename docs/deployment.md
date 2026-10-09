@@ -38,7 +38,7 @@ For Cloudflare builds, the framework briefly writes React Router's Web Streams s
 
 ## Secrets
 
-Use `bun run secret set CLOUDFLARE_API_TOKEN`, `bun run secret set CLOUDFLARE_ACCOUNT_ID`, and `bun run secret set <application secret>` in an interactive terminal. Values go to the OS credential store; the command masks typed characters. `bun run secret status` lists names and configured status. Cloudflare credentials use the reserved `dev.chromatis.framework` service. Application secrets use `dev.chromatis.<application name>`. Wrangler receives credentials only in its child process environment, and application secret values through stdin. Docker receives application secrets through `.chromatis/build/app.env` with mode `0600`; the image contains no secret values.
+Run `bun run secret` in an interactive terminal. It lists every secret the application defines (Cloudflare credentials, required and optional secrets) with whether it is defined; select one with the arrow keys to set, replace or remove it. Values are typed only into a masked prompt and go to the OS credential store, so they never appear in shell history; there are no `set` or `status` arguments. Cloudflare credentials use the reserved `dev.chromatis.framework` service. Application secrets use `dev.chromatis.<application name>`. Wrangler receives credentials only in its child process environment, and application secret values through stdin. Docker receives application secrets through `.chromatis/build/app.env` with mode `0600`; the image contains no secret values.
 
 ## Stateful Runtime migrations
 
