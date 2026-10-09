@@ -1,3 +1,4 @@
+export { createAuthDatabase } from "./auth/database.server.js";
 export { hashPin, verifyPin } from "./auth/hash.server.js";
 export { authMigrations } from "./auth/migrations.js";
 export {
@@ -5,7 +6,7 @@ export {
   createOidcProvider,
   OidcAuthenticationError,
 } from "./auth/oidc.js";
-export { hasPermission, requirePermission } from "./auth/permissions.server.js";
+export { hasRole, requireRole } from "./auth/roles.server.js";
 export { requireUser, withAuthentication } from "./auth/request-context.js";
 export { createSessionManager } from "./auth/session.server.js";
 export { resolveExternalIdentity } from "./auth/sso.server.js";
@@ -15,6 +16,10 @@ export {
   registerUser,
   setUserEnabled,
 } from "./auth/users.server.js";
+export type {
+  AuthDatabase,
+  AuthDatabaseOptions,
+} from "./auth/database.server.js";
 export type {
   AuthContext,
   AuthenticatedRequestHandler,

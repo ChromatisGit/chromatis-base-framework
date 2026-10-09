@@ -3,7 +3,7 @@ import { Link as RouterLink, type LinkProps } from "react-router";
 import { cn } from "./cn.js";
 
 export interface CardProps extends HTMLAttributes<HTMLElement> {
-  kind?: "content" | "action" | "media" | "stat";
+  kind?: "content" | "media" | "stat";
   surface?: "default" | "subtle" | "accent";
   border?: "none" | "default" | "strong";
   orientation?: "vertical" | "horizontal";
@@ -34,15 +34,42 @@ export function Card({
   );
 }
 
+/** The whole card is one navigation link. Do not nest interactive controls. */
+export interface ActionCardProps extends LinkProps {
+  surface?: CardProps["surface"];
+  border?: CardProps["border"];
+  orientation?: CardProps["orientation"];
+  media?: CardProps["media"];
+  emphasis?: CardProps["emphasis"];
+}
+
+export function ActionCard({
+  surface,
+  border,
+  orientation,
+  media,
+  emphasis,
+  className,
+  ...props
+}: ActionCardProps) {
+  return (
+    <RouterLink
+      className={cn("card", "card--action", className)}
+      data-surface={surface}
+      data-border={border}
+      data-orientation={orientation}
+      data-media={media}
+      data-emphasis={emphasis}
+      {...props}
+    />
+  );
+}
+
 export function CardBody({
   className,
   ...props
 }: HTMLAttributes<HTMLDivElement>) {
   return <div className={cn("card__body", className)} {...props} />;
-}
-
-export function CardLink({ className, ...props }: LinkProps) {
-  return <RouterLink className={cn("card__link", className)} {...props} />;
 }
 
 export function CardMedia({

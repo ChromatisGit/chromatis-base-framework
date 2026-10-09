@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { parse } from "smol-toml";
+import { parseApplicationDeclaration } from "../../src/declaration.js";
 
 function findTomlFiles(): string[] {
   const files: string[] = [];
@@ -25,6 +26,11 @@ function findTomlFiles(): string[] {
 }
 
 const files = findTomlFiles();
+const declaration = path.resolve("chromatis.toml");
+if (existsSync(declaration)) {
+  parseApplicationDeclaration(readFileSync(declaration, "utf8"));
+  console.info("[config] valid chromatis.toml");
+}
 if (files.length === 0) {
   console.info("[config] No TOML configuration files found.");
 }

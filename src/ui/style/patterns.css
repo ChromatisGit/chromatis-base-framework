@@ -447,15 +447,7 @@
 .editorial-body {
   max-width: var(--measure);
 }
-/* A full-width color field between two body blocks */
-.editorial-band {
-  margin-block: var(--space-900);
-}
-@media (min-width: 1024px) {
-  .editorial-band {
-    margin-block: var(--space-1000);
-  }
-}
+/* The related-content band gets its vertical rhythm from .section. */
 .editorial-figure .media-placeholder {
   border-radius: 0;
 } /* page-level image region: rectangular */

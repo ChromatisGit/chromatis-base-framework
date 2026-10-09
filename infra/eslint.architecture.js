@@ -113,8 +113,57 @@ const moduleLayoutRule = {
   },
 };
 
+const IDENTITY_PATTERNS = [
+  /\bset_config\b/i,
+  /\bset\s+(?:local\s+|session\s+)?(?:role|session\s+authorization)\b/i,
+  /\bset\s+(?:local\s+|session\s+)?"?app\./i,
+  /\breset\s+(?:role|session\s+authorization|all|"?app\.)/i,
+  /\bdiscard\s+all\b/i,
+];
+
+function checkSqlText(context, node, text) {
+  if (IDENTITY_PATTERNS.some((pattern) => pattern.test(text))) {
+    context.report({
+      node,
+      message:
+        "Chromatis identity and role context (app.*, set_config, SET/RESET ROLE, SESSION AUTHORIZATION) is reserved for the framework.",
+    });
+  }
+}
+
+const noRawSqlRule = {
+  meta: { type: "problem", schema: [], messages: {} },
+  create(context) {
+    return {
+      CallExpression(node) {
+        const callee = node.callee;
+        if (
+          callee.type === "MemberExpression" &&
+          !callee.computed &&
+          callee.property.name === "unsafe"
+        ) {
+          context.report({
+            node,
+            message:
+              "Raw SQL (.unsafe) is not available to application code; use tagged templates and sql.identifier().",
+          });
+        }
+      },
+      Literal(node) {
+        if (typeof node.value === "string") {
+          checkSqlText(context, node, node.value);
+        }
+      },
+      TemplateElement(node) {
+        checkSqlText(context, node, node.value.cooked ?? node.value.raw);
+      },
+    };
+  },
+};
+
 export default {
   rules: {
+    "no-raw-sql": noRawSqlRule,
     dependencies: dependencyRule,
     "module-layout": moduleLayoutRule,
   },

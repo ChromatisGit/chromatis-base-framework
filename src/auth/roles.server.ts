@@ -2,23 +2,23 @@ import { PermissionDeniedError } from "../errors.js";
 import type { Database } from "../db/client.js";
 import type { User } from "./types.js";
 
-export async function hasPermission(
+export async function hasRole(
   database: Database,
   user: User,
-  permission: string,
+  role: string,
 ): Promise<boolean> {
   const rows = await database.userSQL(user)<Array<{ allowed: boolean }>>`
-    SELECT chromatis.has_permission(${user.id}::uuid, ${permission}) AS allowed
+    SELECT chromatis.has_role(${role}) AS allowed
   `;
   return rows[0]?.allowed ?? false;
 }
 
-export async function requirePermission(
+export async function requireRole(
   database: Database,
   user: User,
-  permission: string,
+  role: string,
 ): Promise<void> {
-  if (!(await hasPermission(database, user, permission))) {
-    throw new PermissionDeniedError(`Permission required: ${permission}`);
+  if (!(await hasRole(database, user, role))) {
+    throw new PermissionDeniedError(`Role required: ${role}`);
   }
 }

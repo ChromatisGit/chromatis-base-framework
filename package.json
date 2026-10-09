@@ -6,19 +6,24 @@
   "scripts": {
     "dev": "bun test --watch",
     "build": "bun run typecheck",
-    "check": "bun run typecheck && bun run lint && bun run format:check && bun run config:check && bun run db:check && bun run test",
+    "check": "bun run typecheck && bun run lint && bun run format:check && bun run config:check && bun run db:check && bun run security:check && bun run test",
     "fix": "eslint . --fix && prettier . --write && bun run check",
     "test": "bun test",
     "lint": "eslint . --max-warnings 0 --report-unused-disable-directives",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p infra/scripts",
     "format:check": "prettier . --check",
     "config:check": "bun run infra/scripts/config.ts",
     "db:check": "bun run infra/scripts/dbCheckGeneratedMigrations.ts",
-    "doctor": "bun run infra/scripts/doctor.ts",
+    "doctor": "bun run infra/scripts/deployment.ts doctor",
     "config": "bun run infra/scripts/config.ts",
-    "secret": "bun run infra/scripts/secret.ts",
+    "secret": "bun run infra/scripts/deployment.ts secret",
     "db": "bun run infra/scripts/db.ts",
-    "deploy": "bun run infra/scripts/deploy.ts"
+    "deploy": "bun run infra/scripts/deployment.ts deploy",
+    "init": "bun run infra/scripts/deployment.ts init",
+    "security": "bun run infra/scripts/security.ts",
+    "security:check": "bun run infra/scripts/security.ts check",
+    "security:describe": "bun run infra/scripts/security.ts describe",
+    "security:audit": "bun run infra/scripts/security.ts audit"
   },
   "exports": {
     "./auth": "./src/auth.ts",
@@ -30,10 +35,16 @@
     "./request-boundary": "./src/request-boundary.ts",
     "./runtime": "./src/runtime.ts",
     "./secrets": "./src/secrets.ts",
+    "./stateful": "./src/stateful.ts",
+    "./stateful/bun": "./src/stateful/bun.ts",
+    "./stateful/cloudflare": "./src/stateful/cloudflare.ts",
+    "./stateful/testing": "./src/stateful/testing.ts",
+    "./stateful/workerd": "./src/stateful/workerd.ts",
     "./styles": "./src/ui/style/index.css",
-    "./styles/reference-theme": "./src/ui/style/reference-theme.css",
     "./ui": "./src/index.ts",
-    "./vite": "./src/vite.ts",
+    "./vite": "./src/vite.js",
+    "./declaration": "./src/declaration.ts",
+    "./server-hook": "./src/server.ts",
     "./infra/tsconfig": "./infra/tsconfig.base.json",
     "./infra/eslint": {
       "types": "./infra/eslint.config.base.d.ts",
@@ -48,13 +59,17 @@
     "react-router": ">=7.0.0"
   },
   "dependencies": {
-    "smol-toml": "^1.3.4"
+    "@cloudflare/vite-plugin": "^1.0.0",
+    "@react-router/dev": "^7.0.0",
+    "smol-toml": "^1.3.4",
+    "vite": "^7.0.0",
+    "vite-tsconfig-paths": "^5.0.0",
+    "wrangler": "4.92.0",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.0.0",
     "@eslint/js": "^9.0.0",
     "@neondatabase/serverless": "^1.0.2",
-    "@react-router/dev": "^7.0.0",
     "@types/bun": "^1.4.2",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
@@ -68,9 +83,6 @@
     "prettier": "^3.6.2",
     "react-router": "7.14.2",
     "typescript": "^5.0.0",
-    "typescript-eslint": "^8.0.0",
-    "vite": "^7.0.0",
-    "vite-tsconfig-paths": "^5.0.0",
-    "zod": "^3.24.0"
+    "typescript-eslint": "^8.0.0"
   }
 }

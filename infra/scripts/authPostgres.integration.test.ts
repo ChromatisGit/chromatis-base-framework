@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import postgres from "postgres";
 import { createDatabaseOidcAuthorizationAttemptStore } from "../../src/auth/oidc.js";
+import { createAuthDatabase } from "../../src/auth/database.server.js";
+import { registerUser } from "../../src/auth/users.server.js";
 import { createSessionManager } from "../../src/auth/session.server.js";
 import { resolveExternalIdentity } from "../../src/auth/sso.server.js";
 import { createDatabase } from "../../src/db/client.js";
@@ -19,7 +21,9 @@ const databaseName = "chromatis_auth_test";
 let containerName = "";
 let applicationRoot = "";
 let runtimeUrl = "";
+let authUrl = "";
 let migrationUrl = "";
+let ownerSql: postgres.Sql;
 
 function docker(args: string[], allowFailure = false): string {
   const result = spawnSync("docker", args, { encoding: "utf8" });
@@ -60,6 +64,7 @@ async function waitForPostgres(): Promise<void> {
 }
 
 async function cleanup(): Promise<void> {
+  await ownerSql?.end();
   await closeNodeDatabasePools();
   if (containerName) {
     docker(["rm", "--force", containerName], true);
@@ -97,20 +102,23 @@ beforeAll(async () => {
       );
     }
     const adminUrl = `postgres://postgres:${adminPassword}@127.0.0.1:${port}/${databaseName}`;
-    runtimeUrl = `postgres://chromatis_app:${runtimePassword}@127.0.0.1:${port}/${databaseName}`;
-    migrationUrl = `postgres://chromatis_migrator:${migrationPassword}@127.0.0.1:${port}/${databaseName}`;
+    runtimeUrl = `postgres://chromatis_runtime:${runtimePassword}@127.0.0.1:${port}/${databaseName}`;
+    authUrl = `postgres://chromatis_auth:auth-test-password@127.0.0.1:${port}/${databaseName}`;
+    migrationUrl = `postgres://chromatis_owner:${migrationPassword}@127.0.0.1:${port}/${databaseName}`;
     const admin = postgres(adminUrl, { max: 1 });
     try {
       await admin.unsafe(`
-        CREATE ROLE chromatis_migrator LOGIN PASSWORD '${migrationPassword}'
+        CREATE ROLE chromatis_owner LOGIN PASSWORD '${migrationPassword}'
           NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
-        CREATE ROLE chromatis_app LOGIN PASSWORD '${runtimePassword}'
+        CREATE ROLE chromatis_runtime LOGIN PASSWORD '${runtimePassword}'
           NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
-        ALTER DATABASE ${databaseName} OWNER TO chromatis_migrator;
+      CREATE ROLE chromatis_auth LOGIN PASSWORD 'auth-test-password'
+        NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+        ALTER DATABASE ${databaseName} OWNER TO chromatis_owner;
         REVOKE CREATE ON SCHEMA public FROM PUBLIC;
-        ALTER SCHEMA public OWNER TO chromatis_migrator;
-        GRANT CONNECT ON DATABASE ${databaseName} TO chromatis_app;
-        GRANT USAGE ON SCHEMA public TO chromatis_app;
+        ALTER SCHEMA public OWNER TO chromatis_owner;
+        GRANT CONNECT ON DATABASE ${databaseName} TO chromatis_runtime, chromatis_auth;
+        GRANT USAGE ON SCHEMA public TO chromatis_runtime;
       `);
     } finally {
       await admin.end();
@@ -122,6 +130,7 @@ beforeAll(async () => {
       environment: "test",
       applicationRoot,
     });
+    ownerSql = postgres(migrationUrl, { max: 2 });
   } catch (error) {
     await cleanup();
     throw error;
@@ -130,14 +139,83 @@ beforeAll(async () => {
 
 afterAll(cleanup, 30_000);
 
-test("expired and revoked opaque sessions resolve as unauthenticated", async () => {
+function authDatabase() {
+  return createAuthDatabase(authUrl, {
+    runtime: "bun",
+    runtimeConnectionString: runtimeUrl,
+  });
+}
+
+test("two simultaneous first registrations cannot both become administrators", async () => {
+  const auth = authDatabase();
+  const results = await Promise.all(
+    Array.from({ length: 8 }, (_, index) =>
+      registerUser(auth, { username: `first-${index}`, pin: "1234" }),
+    ),
+  );
+  expect(results.filter((r) => r.status === "registered")).toHaveLength(1);
+  expect(results.filter((r) => r.status === "pending_approval")).toHaveLength(
+    7,
+  );
+  const admins = await ownerSql<Array<{ count: number }>>`
+    SELECT count(*)::integer AS count FROM user_roles WHERE role_key = 'admin'
+  `;
+  expect([...admins]).toEqual([{ count: 1 }]);
+  const enabled = await ownerSql<Array<{ count: number }>>`
+    SELECT count(*)::integer AS count FROM users WHERE enabled
+  `;
+  expect([...enabled]).toEqual([{ count: 1 }]);
+});
+
+test("the runtime credential cannot forge framework state or switch principals", async () => {
   const database = createDatabase(runtimeUrl, {
     runtime: "bun",
     environment: "test",
     migrationConnectionString: migrationUrl,
   });
+  const victim = "00000000-0000-4000-8000-0000000000ff";
+  const attempts = [
+    () =>
+      database.publicSQL`INSERT INTO auth_sessions (id, user_id, expires_at) VALUES (gen_random_uuid(), ${victim}::uuid, now() + interval '1 day')`,
+    () =>
+      database.publicSQL`INSERT INTO user_roles (user_id, role_key) VALUES (${victim}::uuid, 'admin')`,
+    () => database.publicSQL`UPDATE users SET enabled = true`,
+    () => database.publicSQL`SELECT pin_hash FROM users`,
+    () => database.publicSQL`SET ROLE chromatis_auth`,
+  ];
+  for (const attempt of attempts) {
+    await expect(attempt()).rejects.toBeDefined();
+  }
+  const functions = await database.publicSQL<Array<{ name: string }>>`
+    SELECT p.proname::text AS name
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'chromatis' AND p.prosecdef
+  `;
+  expect([...functions]).toEqual([{ name: "has_role" }]);
+});
+
+test("runtime SQL cannot read or write framework state directly", async () => {
+  const database = createDatabase(runtimeUrl, {
+    runtime: "bun",
+    environment: "test",
+    migrationConnectionString: migrationUrl,
+  });
+  for (const table of [
+    "users",
+    "auth_sessions",
+    "roles",
+    "user_roles",
+    "external_identities",
+  ]) {
+    await expect(
+      database.publicSQL`SELECT 1 FROM ${database.publicSQL.identifier(table)}`,
+    ).rejects.toMatchObject({ code: "42501" });
+  }
+});
+
+test("expired and revoked opaque sessions resolve as unauthenticated", async () => {
   const now = new Date("2026-01-01T00:00:00.000Z");
-  const users = await database.anonSQL<Array<{ id: string }>>`
+  const users = await ownerSql<Array<{ id: string }>>`
     INSERT INTO users (enabled) VALUES (true) RETURNING id
   `;
   const user = users[0];
@@ -147,7 +225,7 @@ test("expired and revoked opaque sessions resolve as unauthenticated", async () 
   const activeSessionId = "30000000-0000-4000-8000-000000000001";
   const expiredSessionId = "30000000-0000-4000-8000-000000000002";
   const manager = createSessionManager({
-    database,
+    auth: authDatabase(),
     cookieName: "sid",
     now: () => now,
     createId: () => activeSessionId,
@@ -158,8 +236,8 @@ test("expired and revoked opaque sessions resolve as unauthenticated", async () 
   });
   expect((await manager.resolve(activeRequest))?.user).toEqual({ id: user.id });
 
-  await database.anonSQL`
-    INSERT INTO sessions (id, user_id, expires_at)
+  await ownerSql`
+    INSERT INTO auth_sessions (id, user_id, expires_at)
     VALUES (${expiredSessionId}, ${user.id}, ${new Date(now.getTime() - 1_000)})
   `;
   const expiredRequest = new Request("https://app.test", {
@@ -178,7 +256,7 @@ test("OIDC correlation grants allow one-time framework operations only", async (
     environment: "test",
     migrationConnectionString: migrationUrl,
   });
-  const attempts = createDatabaseOidcAuthorizationAttemptStore(database);
+  const attempts = createDatabaseOidcAuthorizationAttemptStore(authDatabase());
   const attempt = {
     providerId: "integration-provider",
     stateHash: "state-hash",
@@ -196,7 +274,7 @@ test("OIDC correlation grants allow one-time framework operations only", async (
 
   let directReadError: unknown;
   try {
-    await database.anonSQL`SELECT code_verifier FROM oidc_authorization_attempts`;
+    await database.publicSQL`SELECT code_verifier FROM oidc_authorization_attempts`;
   } catch (error) {
     directReadError = error;
   }
@@ -204,11 +282,6 @@ test("OIDC correlation grants allow one-time framework operations only", async (
 });
 
 test("concurrent first-time SSO callbacks resolve one user without orphans", async () => {
-  const database = createDatabase(runtimeUrl, {
-    runtime: "bun",
-    environment: "test",
-    migrationConnectionString: migrationUrl,
-  });
   const identity = {
     providerId: "integration-provider",
     externalId: `external-${crypto.randomUUID()}`,
@@ -216,7 +289,7 @@ test("concurrent first-time SSO callbacks resolve one user without orphans", asy
     displayName: "Concurrent User",
     raw: { sub: "provider-subject", private_provider_value: "server-only" },
   };
-  const orphanCountBefore = await database.anonSQL<Array<{ count: number }>>`
+  const orphanCountBefore = await ownerSql<Array<{ count: number }>>`
     SELECT count(*)::integer AS count
     FROM users u
     LEFT JOIN external_identities identity ON identity.user_id = u.id
@@ -224,21 +297,21 @@ test("concurrent first-time SSO callbacks resolve one user without orphans", asy
   `;
   const users = await Promise.all(
     Array.from({ length: 8 }, () =>
-      resolveExternalIdentity(database, identity),
+      resolveExternalIdentity(authDatabase(), identity),
     ),
   );
 
   expect(new Set(users.map((user) => user.id)).size).toBe(1);
-  const linked = await database.anonSQL<Array<{ user_id: string }>>`
+  const linked = await ownerSql<Array<{ user_id: string }>>`
     SELECT user_id FROM external_identities
     WHERE provider = ${identity.providerId} AND external_id = ${identity.externalId}
   `;
-  expect(linked).toEqual([{ user_id: users[0]?.id }]);
-  const orphanCountAfter = await database.anonSQL<Array<{ count: number }>>`
+  expect([...linked]).toEqual([{ user_id: users[0]!.id }]);
+  const orphanCountAfter = await ownerSql<Array<{ count: number }>>`
     SELECT count(*)::integer AS count
     FROM users u
     LEFT JOIN external_identities identity ON identity.user_id = u.id
     WHERE u.username IS NULL AND identity.user_id IS NULL
   `;
-  expect(orphanCountAfter).toEqual(orphanCountBefore);
+  expect([...orphanCountAfter]).toEqual([...orphanCountBefore]);
 });

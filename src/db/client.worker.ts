@@ -1,6 +1,8 @@
 import { Client } from "@neondatabase/serverless";
 import {
+  assertSafeRole,
   assertSafeRuntimeRole,
+  DATABASE_RUNTIME_ROLE,
   ensureDatabaseReady,
   inspectDatabaseRole,
   type SetupQueryExecutor,
@@ -40,11 +42,12 @@ async function runNeonTx<T>(
   connectionString: string,
   userId: string | null,
   fn: (sql: DbSql) => Promise<T>,
+  role: string,
 ): Promise<T> {
   const client = new Client({ connectionString });
   await client.connect();
   try {
-    await assertSafeRuntimeRole(makeSetupExecutor(client));
+    await assertSafeRole(makeSetupExecutor(client), role, "connection");
     await client.query("BEGIN");
     if (userId) {
       await client.query("SELECT set_config('app.user_id', $1, true)", [
@@ -79,17 +82,18 @@ function makeSetupExecutor(client: NeonClient): SetupQueryExecutor {
 export function createWorkerAdapter(
   connectionString: string,
   migrationConnectionString?: string,
+  role: string = DATABASE_RUNTIME_ROLE,
 ): DbAdapter {
   return {
-    async withAnonTx<T>(fn: (sql: DbSql) => Promise<T>): Promise<T> {
-      return runNeonTx(connectionString, null, fn);
+    async withPublicTx<T>(fn: (sql: DbSql) => Promise<T>): Promise<T> {
+      return runNeonTx(connectionString, null, fn, role);
     },
 
     async withUserTx<T>(
       user: DatabaseUser,
       fn: (sql: DbSql) => Promise<T>,
     ): Promise<T> {
-      return runNeonTx(connectionString, user.id, fn);
+      return runNeonTx(connectionString, user.id, fn, role);
     },
 
     async runSetup(options: AdapterSetupOptions): Promise<void> {

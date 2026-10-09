@@ -36,7 +36,7 @@ export function Breadcrumbs({ items, label }: BreadcrumbsProps) {
                   "breadcrumbs__item--collapse",
               )}
             >
-              {item.to ? (
+              {index < items.length - 1 && item.to ? (
                 <Link className="breadcrumbs__link" to={item.to}>
                   {item.label}
                 </Link>
@@ -195,12 +195,12 @@ export function EditorialArticle({
           {figure}
         </figure>
       )}
-      <div className="container container--reading">
+      <div className="container container--reading section section--flush-top">
         {introduction && <div className="editorial-intro">{introduction}</div>}
         <div className="editorial-body prose prose--editorial">{children}</div>
       </div>
       {related && (
-        <aside className="editorial-band surface-emphasis">
+        <aside className="editorial-band surface-emphasis section">
           <div className="container container--reading">{related}</div>
         </aside>
       )}

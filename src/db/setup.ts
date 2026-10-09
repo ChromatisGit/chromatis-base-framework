@@ -31,7 +31,9 @@ const READY = Symbol("ready");
 const readinessCache = new Map<string, Promise<void> | typeof READY>();
 const MIGRATION_LOCK_NAMESPACE = 23117;
 const MIGRATION_LOCK_KEY = 40873;
-export const DATABASE_RUNTIME_ROLE = "chromatis_app";
+export const DATABASE_RUNTIME_ROLE = "chromatis_runtime";
+/** Separate principal used only by framework auth code, never by application SQL. */
+export const DATABASE_AUTH_ROLE = "chromatis_auth";
 
 type RoleInspection = Readonly<{
   role_name?: unknown;
@@ -67,13 +69,15 @@ export async function inspectDatabaseRole(
   return rows[0] ?? {};
 }
 
-export async function assertSafeRuntimeRole(
+export async function assertSafeRole(
   query: SetupQueryExecutor,
+  expectedRole: string,
+  label: string,
 ): Promise<void> {
   const role = await inspectDatabaseRole(query);
-  if (role.role_name !== DATABASE_RUNTIME_ROLE) {
+  if (role.role_name !== expectedRole) {
     throw new Error(
-      `[db] DATABASE_URL must connect as ${DATABASE_RUNTIME_ROLE}; connected as ${String(role.role_name)}.`,
+      `[db] ${label} must connect as ${expectedRole}; connected as ${String(role.role_name)}.`,
     );
   }
   if (
@@ -84,9 +88,15 @@ export async function assertSafeRuntimeRole(
     role.owns_application_tables === true
   ) {
     throw new Error(
-      `[db] Runtime role ${DATABASE_RUNTIME_ROLE} must be non-privileged, must not bypass RLS, and must not own application tables.`,
+      `[db] Role ${expectedRole} must be non-privileged, must not bypass RLS, and must not own application tables.`,
     );
   }
+}
+
+export function assertSafeRuntimeRole(
+  query: SetupQueryExecutor,
+): Promise<void> {
+  return assertSafeRole(query, DATABASE_RUNTIME_ROLE, "DATABASE_URL");
 }
 
 function getCacheKey(options: MigrationEngineOptions): string {

@@ -76,17 +76,11 @@
   }
 }
 
-/* The masthead scrolls away from 768px. Below that it is sticky, with
-   optional headroom. Navigation uses the same tree in the sidebar and menu. */
-/* In-page targets clear the masthead where it can be visible (phones);
-   from 768px nothing is sticky at the top */
+/* The masthead is sticky at every viewport size and hides on scroll down.
+   Navigation uses the same tree in the sidebar and menu.
+   In-page targets clear the masthead wherever it can be visible. */
 :root {
   --header-height-sticky: var(--header-height);
-}
-@media (min-width: 768px) {
-  :root {
-    --header-height-sticky: 0px;
-  }
 }
 
 /* ---- Masthead ------------------------------------------------------ */
@@ -115,7 +109,7 @@
   padding-inline: max(var(--page-gutter), env(safe-area-inset-left, 0px))
     max(var(--page-gutter), env(safe-area-inset-right, 0px));
 }
-/* Phones: sticky, hidden while scrolling down (moves only, never resizes) */
+/* Hidden while scrolling down (moves only, never resizes). */
 .site-header--static {
   transition: transform var(--motion-default) var(--ease-standard);
 }
@@ -123,10 +117,17 @@
   transform: translateY(calc(-100% - env(safe-area-inset-top, 0px)));
 }
 @media (min-width: 768px) {
-  .site-header--static {
-    position: static;
-    transform: none;
-    transition: none;
+  .site-header--static .site-header__brand-inner {
+    padding-inline: max(
+        var(--page-gutter),
+        var(--sidebar-rail-width),
+        env(safe-area-inset-left, 0px)
+      )
+      max(
+        var(--page-gutter),
+        var(--sidebar-rail-width),
+        env(safe-area-inset-right, 0px)
+      );
   }
   .site-header__menu-btn {
     display: none;
@@ -195,16 +196,6 @@
   }
 }
 
-/* ---- Reading width ------------------------------------------------- */
-/* Page content is at most 720px wide (--container-reading) and centred in
-   the space next to the sidebar, so lines stay short and the page keeps
-   room on the left and right. Wide compositions opt out with
-   .container--wide (the editorial feature image); full-width colour bands
-   still run edge to edge, with their content at reading width. */
-.shell main .container:not(.container--wide) {
-  max-width: calc(var(--container-reading) + 2 * var(--page-gutter));
-}
-
 /* ---- Frame --------------------------------------------------------- */
 .shell__sidebar {
   display: none;
@@ -217,15 +208,12 @@
   container-type: inline-size;
 } /* page patterns respond to the space beside the sidebar */
 @media (min-width: 768px) {
-  .shell {
-    display: grid;
-    /* Reserve the same column in both states so the page never shifts. */
-    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-  }
   .shell__sidebar {
     display: block;
-    position: sticky;
-    top: env(safe-area-inset-top, 0px);
+    position: fixed;
+    z-index: calc(var(--z-header) - 1);
+    top: max(env(safe-area-inset-top, 0px), var(--shell-top, 0px));
+    left: 0;
     width: var(--sidebar-width);
     /* Ends at the bottom of the window: while the masthead is still in
        view, the sidebar is shorter by the part of the masthead that shows
@@ -240,16 +228,62 @@
     padding: var(--space-300) var(--space-300) var(--space-900)
       max(var(--space-300), env(safe-area-inset-left, 0px));
     border-right: var(--border-1) solid var(--color-border-subtle);
+    background: var(--color-bg);
+    box-shadow: var(--shadow-overlay);
     transition: width var(--motion-default) var(--ease-standard);
   }
   .shell--collapsed .shell__sidebar {
     width: var(--sidebar-rail-width);
   }
-  .shell__sidebar .section-nav {
+  /* A column, so an optional footer can sit at the bottom */
+  .shell__sidebar:has(> .shell__sidebar-footer) {
+    display: flex;
+    flex-direction: column;
+    padding-bottom: var(--space-300);
+  }
+  /* Only the outer panel changes width. Its contents keep their open width,
+     so labels retain the same line breaks throughout the transition. */
+  .shell__sidebar-inner {
     width: calc(var(--sidebar-width) - 2 * var(--space-300) - var(--border-1));
   }
   .shell__main {
+    /* Keep content beside the open sidebar while full-width surfaces span
+       the viewport. The inset follows the sidebar's current width. */
+    --shell-sidebar-inset: var(--sidebar-width);
     padding-bottom: 0;
+  }
+  .shell--collapsed .shell__main {
+    --shell-sidebar-inset: var(--sidebar-rail-width);
+  }
+  .shell__main .container {
+    max-width: calc(
+      var(--container-content) + var(--shell-sidebar-inset) + 2 *
+        var(--page-gutter)
+    );
+    padding-inline: max(
+        calc(var(--shell-sidebar-inset) + var(--page-gutter)),
+        env(safe-area-inset-left, 0px)
+      )
+      max(var(--page-gutter), env(safe-area-inset-right, 0px));
+  }
+  .shell__main .container--reading {
+    max-width: calc(
+      var(--container-reading) + var(--shell-sidebar-inset) + 2 *
+        var(--page-gutter)
+    );
+  }
+  .shell__main .container--wide {
+    max-width: calc(
+      var(--container-wide) + var(--shell-sidebar-inset) + 2 *
+        var(--page-gutter)
+    );
+  }
+  .shell__main .site-footer {
+    padding-inline: max(
+        calc(var(--shell-sidebar-inset) + var(--page-gutter)),
+        env(safe-area-inset-left, 0px)
+      )
+      max(var(--page-gutter), env(safe-area-inset-right, 0px));
   }
 }
 
@@ -259,6 +293,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-200);
+  white-space: nowrap;
   min-height: var(--target-min);
   margin-bottom: var(--space-400);
   padding: 0 var(--space-300) 0 var(--space-200);
@@ -392,18 +427,24 @@
   height: var(--size-icon-lg);
 }
 .section-nav__initial {
-  display: none;
+  position: absolute;
+  inset-inline-start: var(--space-400);
+  top: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--size-icon-lg);
+  height: var(--size-icon-lg);
+  opacity: 0;
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 .section-nav__link-label,
 .section-nav__link .badge {
   transition: opacity var(--motion-default) var(--ease-standard);
 }
 .shell--collapsed .section-nav__initial {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--size-icon-lg);
-  height: var(--size-icon-lg);
+  opacity: 1;
   font-weight: var(--weight-bold);
 }
 .shell--collapsed .section-nav__link-label,
@@ -530,6 +571,8 @@
    ===================================================================== */
 .site-footer {
   padding-block: var(--space-900) var(--space-700);
+  padding-inline: max(var(--page-gutter), env(safe-area-inset-left, 0px))
+    max(var(--page-gutter), env(safe-area-inset-right, 0px));
   border-top: var(--border-1) solid var(--color-border-subtle);
 }
 .site-footer__grid {
@@ -551,6 +594,11 @@
   font-size: var(--text-md);
   font-weight: var(--weight-bold);
   margin-bottom: var(--space-200);
+}
+.site-footer__links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 .site-footer__links a {
   display: inline-flex;
@@ -608,4 +656,19 @@
     animation: none;
     transition: none;
   }
+}
+
+/* Sidebar footer slot: a control pinned to the bottom of the sidebar */
+.shell__sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-200);
+  margin-top: auto;
+  padding-top: var(--space-400);
+  border-top: var(--border-1) solid var(--color-border-subtle);
+}
+.shell__sidebar-footer-label {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }

@@ -46,7 +46,7 @@ interface RoutineState {
   files: RoutineSourceFile[];
 }
 
-function normalizePath(filePath: string): string {
+export function normalizePath(filePath: string): string {
   return filePath.split(path.sep).join("/");
 }
 
@@ -77,7 +77,7 @@ function readSqlFiles(dir: string): string[] {
   });
 }
 
-function stripSqlComments(sql: string): string {
+export function stripSqlComments(sql: string): string {
   return sql.replace(/--.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
@@ -377,7 +377,7 @@ function parseVersion(version: string): [number, number, number] {
   return [Number(match[1]), Number(match[2]), Number(match[3])];
 }
 
-function nextPatchVersion(rootDir = process.cwd()): string {
+export function nextPatchVersion(rootDir = process.cwd()): string {
   const migrationsDir = path.join(rootDir, "migrations");
   const latest = existsSync(migrationsDir)
     ? readdirSync(migrationsDir, { withFileTypes: true })
@@ -408,7 +408,7 @@ function nextPatchVersion(rootDir = process.cwd()): string {
   return `${major}.${minor}.${patch + 1}`;
 }
 
-function slugifyDescription(description: string): string {
+export function slugifyDescription(description: string): string {
   return description
     .trim()
     .toLowerCase()

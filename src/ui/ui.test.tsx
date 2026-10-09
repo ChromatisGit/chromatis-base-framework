@@ -3,13 +3,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 
 import { Button } from "./primitives/Button";
-import { Card, CardBody, CardLink } from "./primitives/Card";
+import { ActionCard, CardBody } from "./primitives/Card";
 import { Input } from "./primitives/Input";
 import { Tabs } from "./primitives/Tabs";
 import { Accordion } from "./primitives/Accordion";
 import { DataTable } from "./primitives/DataView";
 import { Pagination, paginationModel } from "./primitives/Pagination";
 import { Progress } from "./primitives/Loading";
+import { Choice, ChoiceGroup } from "./primitives/Choice";
+import { Switch } from "./primitives/Switch";
 
 describe("first UI slice", () => {
   test("a busy action remains a native disabled button", () => {
@@ -39,11 +41,9 @@ describe("first UI slice", () => {
   test("action cards render a real router link", () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <Card kind="action">
-          <CardBody>
-            <CardLink to="/courses">Courses</CardLink>
-          </CardBody>
-        </Card>
+        <ActionCard to="/courses">
+          <CardBody>Courses</CardBody>
+        </ActionCard>
       </MemoryRouter>,
     );
     expect(html).toContain('class="card card--action"');
@@ -134,5 +134,28 @@ describe("second UI slice", () => {
     );
     expect(progress).toContain("aria-labelledby=");
     expect(progress).toContain('value="35"');
+  });
+});
+
+describe("choice controls", () => {
+  test("a choice wraps the control and its label in one target", () => {
+    const html = renderToStaticMarkup(
+      <ChoiceGroup legend="Answer">
+        <Choice type="radio" name="a" value="1" label="One" hint="first" />
+      </ChoiceGroup>,
+    );
+    expect(html).toContain("<fieldset");
+    expect(html).toContain(
+      '<label class="choice"><input class="choice__input"',
+    );
+    expect(html).toContain('type="radio"');
+    expect(html).toContain('class="choice__hint"');
+  });
+
+  test("a switch is a checkbox with the switch role", () => {
+    const html = renderToStaticMarkup(<Switch label="Unlocked" hideLabel />);
+    expect(html).toContain('role="switch"');
+    expect(html).toContain('type="checkbox"');
+    expect(html).toContain("visually-hidden");
   });
 });

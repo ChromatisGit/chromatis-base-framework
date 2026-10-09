@@ -1,5 +1,12 @@
 import type { MigrationAsset } from "../db/types.js";
 
+// Framework state (users, Auth Sessions, role assignments, external identities,
+// OIDC attempts) is reachable only by the separate chromatis_auth principal,
+// which only framework auth code connects as. chromatis_runtime, the role
+// application SQL runs as, has no privileges on it, so holding the runtime
+// credential never allows impersonation, role assignment or reading secrets.
+// The single SECURITY DEFINER function is has_role(), which reveals only the
+// roles of the current User.
 const createAuthSchema = `
 CREATE SCHEMA IF NOT EXISTS chromatis;
 
@@ -12,27 +19,18 @@ CREATE TABLE users (
   CHECK ((username IS NULL) = (pin_hash IS NULL))
 );
 
-CREATE TABLE sessions (
+CREATE TABLE auth_sessions (
   id uuid PRIMARY KEY,
   user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   expires_at timestamptz NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX sessions_user_id_idx ON sessions (user_id);
-CREATE INDEX sessions_expires_at_idx ON sessions (expires_at);
+CREATE INDEX auth_sessions_user_id_idx ON auth_sessions (user_id);
+CREATE INDEX auth_sessions_expires_at_idx ON auth_sessions (expires_at);
 
 CREATE TABLE roles (
   key text PRIMARY KEY,
   description text NOT NULL
-);
-CREATE TABLE permissions (
-  key text PRIMARY KEY,
-  description text NOT NULL
-);
-CREATE TABLE role_permissions (
-  role_key text NOT NULL REFERENCES roles(key) ON DELETE CASCADE,
-  permission_key text NOT NULL REFERENCES permissions(key) ON DELETE CASCADE,
-  PRIMARY KEY (role_key, permission_key)
 );
 CREATE TABLE user_roles (
   user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -50,33 +48,42 @@ CREATE TABLE external_identities (
   PRIMARY KEY (provider, external_id)
 );
 
-CREATE OR REPLACE FUNCTION chromatis.has_permission(target_user_id uuid, requested_permission_key text)
-RETURNS boolean
+REVOKE ALL ON TABLE users, auth_sessions, roles, user_roles, external_identities FROM PUBLIC;
+GRANT USAGE ON SCHEMA chromatis TO chromatis_runtime;
+
+GRANT SELECT, INSERT, UPDATE (enabled) ON users TO chromatis_auth;
+GRANT SELECT, INSERT, DELETE ON auth_sessions TO chromatis_auth;
+GRANT SELECT, INSERT ON roles, user_roles, external_identities TO chromatis_auth;
+
+-- The User ID propagated by userSQL / userTransaction, or NULL without a User.
+CREATE FUNCTION chromatis.current_user_id()
+RETURNS uuid
 LANGUAGE sql
 STABLE
 SECURITY INVOKER
-SET search_path = public, pg_temp
+SET search_path = pg_catalog, pg_temp
+AS $$
+  SELECT nullif(pg_catalog.current_setting('app.user_id', true), '')::uuid;
+$$;
+
+-- Role check for RLS policies; user_roles itself is not readable by runtime SQL.
+CREATE FUNCTION chromatis.has_role(requested_role_key text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
 AS $$
   SELECT EXISTS (
     SELECT 1
     FROM public.user_roles ur
-    JOIN public.role_permissions rp ON rp.role_key = ur.role_key
-    WHERE ur.user_id = target_user_id
-      AND rp.permission_key = requested_permission_key
+    WHERE ur.user_id = chromatis.current_user_id()
+      AND ur.role_key = requested_role_key
   );
 $$;
 
-REVOKE ALL ON TABLE users, sessions, roles, permissions, role_permissions, user_roles, external_identities FROM PUBLIC;
-REVOKE ALL ON FUNCTION chromatis.has_permission(uuid, text) FROM PUBLIC;
-
-GRANT SELECT (id, username, pin_hash, enabled), INSERT (username, pin_hash, enabled), UPDATE (enabled) ON users TO chromatis_app;
-GRANT SELECT (id, user_id, expires_at), INSERT (id, user_id, expires_at), DELETE ON sessions TO chromatis_app;
-GRANT INSERT (key, description) ON roles TO chromatis_app;
-GRANT SELECT (role_key, permission_key) ON role_permissions TO chromatis_app;
-GRANT SELECT (user_id, role_key), INSERT (user_id, role_key) ON user_roles TO chromatis_app;
-GRANT SELECT (provider, external_id, user_id), INSERT (provider, external_id, user_id, email, display_name, raw) ON external_identities TO chromatis_app;
-GRANT USAGE ON SCHEMA chromatis TO chromatis_app;
-GRANT EXECUTE ON FUNCTION chromatis.has_permission(uuid, text) TO chromatis_app;
+REVOKE ALL ON FUNCTION chromatis.current_user_id(), chromatis.has_role(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION chromatis.current_user_id(), chromatis.has_role(text) TO chromatis_runtime;
 `;
 
 const addOidcAuthorizationAttempts = `
@@ -91,72 +98,15 @@ CREATE TABLE oidc_authorization_attempts (
 CREATE INDEX oidc_authorization_attempts_expires_at_idx
   ON oidc_authorization_attempts (expires_at);
 
-CREATE OR REPLACE FUNCTION chromatis.store_oidc_authorization_attempt(
-  attempt_provider text,
-  attempt_state_hash text,
-  attempt_nonce text,
-  attempt_code_verifier text,
-  attempt_expires_at timestamptz
-)
-RETURNS void
-LANGUAGE plpgsql
-VOLATILE
-SECURITY DEFINER
-SET search_path = public, pg_temp
-AS $$
-BEGIN
-  DELETE FROM public.oidc_authorization_attempts WHERE expires_at <= now();
-  INSERT INTO public.oidc_authorization_attempts
-    (provider, state_hash, nonce, code_verifier, expires_at)
-  VALUES
-    (attempt_provider, attempt_state_hash, attempt_nonce, attempt_code_verifier, attempt_expires_at);
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION chromatis.consume_oidc_authorization_attempt(
-  attempt_provider text,
-  attempt_state_hash text
-)
-RETURNS TABLE (
-  provider text,
-  state_hash text,
-  nonce text,
-  code_verifier text,
-  expires_at timestamptz
-)
-LANGUAGE plpgsql
-VOLATILE
-SECURITY DEFINER
-SET search_path = public, pg_temp
-AS $$
-BEGIN
-  RETURN QUERY
-  DELETE FROM public.oidc_authorization_attempts AS attempt
-  WHERE attempt.provider = attempt_provider
-    AND attempt.state_hash = attempt_state_hash
-  RETURNING
-    attempt.provider,
-    attempt.state_hash,
-    attempt.nonce,
-    attempt.code_verifier,
-    attempt.expires_at;
-END;
-$$;
-
 REVOKE ALL ON TABLE oidc_authorization_attempts FROM PUBLIC;
-REVOKE ALL ON FUNCTION chromatis.store_oidc_authorization_attempt(text, text, text, text, timestamptz) FROM PUBLIC;
-REVOKE ALL ON FUNCTION chromatis.consume_oidc_authorization_attempt(text, text) FROM PUBLIC;
-
-GRANT EXECUTE ON FUNCTION chromatis.store_oidc_authorization_attempt(text, text, text, text, timestamptz) TO chromatis_app;
-GRANT EXECUTE ON FUNCTION chromatis.consume_oidc_authorization_attempt(text, text) TO chromatis_app;
+GRANT SELECT, INSERT, DELETE ON oidc_authorization_attempts TO chromatis_auth;
 `;
 
 export const authMigrations: readonly MigrationAsset[] = [
   {
     module: "chromatis-auth",
     version: "1.0.0",
-    description:
-      "create users sessions roles permissions and external identities",
+    description: "create users auth sessions roles and external identities",
     sql: createAuthSchema,
   },
   {

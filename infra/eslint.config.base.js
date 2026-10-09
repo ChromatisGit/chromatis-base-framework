@@ -28,6 +28,10 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      "react-hooks/set-state-in-effect": "off",
+
+      // Application SQL: parameters only, no raw SQL, no identity manipulation
+      "chromatis/no-raw-sql": "error",
 
       // Prefer type imports to keep the runtime bundle clean
       "@typescript-eslint/consistent-type-imports": [
