@@ -1,6 +1,6 @@
 import type { SecretTerminal } from "./secretPrompt.js";
 
-export type SecretKind = "credential" | "required" | "optional";
+export type SecretKind = "credential" | "required" | "production";
 
 export interface SecretEntry {
   name: string;
@@ -17,7 +17,7 @@ export interface SecretStore {
 const KIND_LABEL: Record<SecretKind, string> = {
   credential: "Cloudflare credential",
   required: "required",
-  optional: "optional",
+  production: "required in production",
 };
 
 function describe(entry: SecretEntry, configured: boolean): string {

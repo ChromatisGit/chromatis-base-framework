@@ -92,6 +92,8 @@ const dependencyRule = {
   },
 };
 
+const MODULE_ROOT_FILES = ["index.ts", "module.ts", "module.test.ts"];
+
 const moduleLayoutRule = {
   meta: { type: "problem", schema: [], messages: {} },
   create(context) {
@@ -101,11 +103,12 @@ const moduleLayoutRule = {
         if (
           file?.area === "modules" &&
           file.rest.length === 1 &&
-          file.rest[0] !== "index.ts"
+          !MODULE_ROOT_FILES.includes(file.rest[0])
         ) {
           context.report({
             node,
-            message: "Only index.ts may live directly in a module directory.",
+            message:
+              "Only index.ts, module.ts (the Chromatis module declaration) and module.test.ts may live directly in a module directory.",
           });
         }
       },

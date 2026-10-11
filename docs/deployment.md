@@ -1,47 +1,60 @@
-# Framework deployment
+# Deploying an instance
 
-An application declares deployment settings in `chromatis.toml`. This follows the framework's existing TOML configuration convention. `bun run config` validates the declaration with Zod. The application supplies a server hook only when it needs a Stateful Runtime or realtime route.
+`chromatis deploy` takes an instance from configuration to a running application on Cloudflare or a Bun server in Docker. The design is in [ARCHITECTURE.md](../ARCHITECTURE.md); this page is the operating guide. For a step-by-step Cloudflare setup (account, API token) see [cloudflare-deployment.md](cloudflare-deployment.md).
+
+## Choosing the target
+
+`config/app.toml` decides:
 
 ```toml
-name = "example"
-publicUrl = "https://example.com"
-target = "cloudflare"
-postgresql = false
-runtime = ["room"]
-serverHook = "server/hook.ts"
-secrets = ["PAYMENT_KEY"]
-optionalSecrets = ["DIRECTORY_KEY"]
-
-[variables]
-DIRECTORY_URL = "https://directory.example.com"
-
-[contentMounts]
-catalog = "../content/builds/abc123"
+[deployment]
+target = "cloudflare"   # or "bun"
+domain = "app.example.org"
 ```
 
-`target` defaults to Cloudflare, `postgresql` to false, and `port` to 3000. `runtime` names must exactly match the `kind` values in the hook's definitions. The hook supplies `definitions`, `createService(host, env)`, and optionally `realtimeRoute`, `socket`, and `sweep`. A content mount is read only in Docker and appears at `/content/<name>/<source basename>`; the framework sets `CONTENT_<NAME>_DIR` to that path. The framework also generates `.chromatis/build/content.ts` with the mount's files for Worker builds. An application can import that generated module when it needs content in a Worker. The content directory must exist at build time.
+`--target cloudflare|bun|docker` overrides it for one command (`bun` and `docker` are the same Bun server build). The domain must be the real public host name before a live Cloudflare deploy; the preflight rejects `example.com` and `localhost` for Cloudflare. The application name (Worker name, secret service, image name) is the package name without scope unless `[deployment] name` is set; keep it stable, because renaming a Worker creates a new one.
 
-## Commands
+## What `chromatis deploy` does
 
-- `bun run init` repairs the canonical `tsconfig.json` and `eslint.config.js` stubs and adds ignores for generated files.
-- `bun run check` and `bun run lint` reject byte changes to those stubs.
-- `bun run build --target cloudflare|docker` builds with the framework Vite config.
-- `bun run deploy --dry-run --target cloudflare|docker` builds and prints names, bindings, migrations, and variable and secret names without contacting either platform.
-- `bun run doctor --target cloudflare|docker` checks the chosen target.
-- `bun run deploy --target cloudflare|docker` checks, builds, applies database migrations only when declared, pushes secrets, deploys, and tests the page and realtime route.
+1. Runs the instance's own `check` script (`bun run check`) unless `--dry-run`.
+2. Runs build contributions and validates artifacts (the same steps as `chromatis build`).
+3. Asks for the Cloudflare credentials if they are missing (Cloudflare target, not dry run, not offline).
+4. Preflight, first part: everything that does not need the build output.
+5. Builds the application with the exact validated artifacts embedded.
+6. Preflight, second part: build output, artifacts still match the embedding, Wrangler accepts the generated configuration (`wrangler deploy --dry-run`).
+7. Prints the plan: target, name, public URL, runtime bindings, Durable Object migration tags, variable and secret names (never values), contributions and artifacts.
+8. With `--dry-run` it stops here (the Docker target also writes its compose files). Otherwise it applies database migrations when a module uses PostgreSQL, uploads secrets (Cloudflare) or writes the env file (Docker), deploys, and runs the smoke test.
 
-Set `publicUrl` in `chromatis.toml` to the application's real URL before a live Cloudflare deploy. Example domains are accepted for offline builds and dry runs, but `doctor` rejects them for a live Cloudflare deploy.
+`--offline` limits the preflight to checks that need neither secrets nor network; a dry run without it still reads the Cloudflare API but changes nothing.
 
-React Router's installed CLI accepts `--config` for Vite. It searches the project root for `react-router.config.*`; the framework generates an ignored root file before building. The application does not keep either config file. Cloudflare build input is `.chromatis/build/wrangler.json`; the Vite plugin writes the deployable config with the actual asset path to `build/server/wrangler.json`. The Docker image input is `.chromatis/image` and the framework Dockerfile. All of these paths are ignored.
+## Preflight
 
-For Cloudflare builds, the framework briefly writes React Router's Web Streams server entry to `app/entry.server.tsx` and removes it after the build, including on failure. When a consumer route is a re-export from an installed package, the framework temporarily inlines that route's source so React Router can separate browser and server exports, then restores the original file.
+Every failure is listed in one message so they can be fixed together:
+
+- tooling files and generated files are current (`chromatis init`);
+- every declared artifact exists and passes its validator, and the build embeds the current artifact;
+- the server hook loads and its definitions equal the declared runtime kinds;
+- the Durable Object migration ledger is consistent;
+- for modules that use PostgreSQL: generated-migration and access-rule checks, and a connection with the runtime credential (pending migrations are reported, since deploy applies them);
+- every secret required for the environment is set, naming the missing ones;
+- Cloudflare: a real domain, Wrangler installed, credentials valid, generated configuration accepted; Docker: a reachable Docker daemon.
+
+`chromatis doctor` runs the same preflight against the current build output and prints the instance diagnostics first; `doctor --json` returns both as JSON.
 
 ## Secrets
 
-Run `bun run secret` in an interactive terminal. It lists every secret the application defines (Cloudflare credentials, required and optional secrets) with whether it is defined; select one with the arrow keys to set, replace or remove it. Values are typed only into a masked prompt and go to the OS credential store, so they never appear in shell history; there are no `set` or `status` arguments. Cloudflare credentials use the reserved `dev.chromatis.framework` service. Application secrets use `dev.chromatis.<application name>`. Wrangler receives credentials only in its child process environment, and application secret values through stdin. Docker receives application secrets through `.chromatis/build/app.env` with mode `0600`; the image contains no secret values.
+Required secrets are those the active modules declare (`always`, plus `production` ones when the environment is production) and, for modules that use PostgreSQL, `DATABASE_URL` and `DATABASE_MIGRATION_URL`. Set them with `chromatis secret`, or provide them as environment variables (for CI, or in Bun's git-ignored `.env.local`); the environment wins over the credential store. Cloudflare credentials (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) use the reserved service `dev.chromatis.framework`; application secrets use `dev.chromatis.<application name>`. Wrangler receives credentials only in its child-process environment and secret values through standard input. The migration credential is used only to apply migrations and is not uploaded.
 
-## Stateful Runtime migrations
+## Cloudflare mechanics
 
-The application commits `.chromatis/runtime-migrations.json` (older applications may still have `.chromatis-runtime-migrations.json`, which is read when the new file is absent). On build, the framework compares the desired runtime class set with the classes recorded by the ledger. A change appends `v<N+1>` with sorted additions and deletions; it does not edit earlier entries. Rebuilding with the same definitions changes nothing. Review and commit the new ledger entry before deployment. A class rename deletes the old class and adds a new one; existing in-memory Runtime Instances are not preserved by this migration.
+Chromatis writes `.chromatis/build/wrangler.json` (name, entry, compatibility settings, `PUBLIC_URL`, Durable Object bindings and migrations) and builds with the Cloudflare Vite plugin, which emits the deployable `build/server/wrangler.json`. For each Stateful Runtime kind the Worker exports a Durable Object class; the committed ledger `.chromatis/runtime-migrations.json` records class additions and deletions as appended tags (`v1`, `v2`, …) and is never edited by hand. A renamed kind deletes the old class and adds a new one; in-memory instances are not carried over. Review and commit a new ledger entry before deploying. The smoke test requests the public URL; if that fails it resolves the Worker's `workers.dev` URL and warns that the custom domain still has to be attached in Cloudflare.
 
-The Session Directory process is a separate deployable, outside this application deployment command. An application registers with it only when `DIRECTORY_URL`, `DIRECTORY_KEY`, and `PUBLIC_URL` are all present.
+React Router's Web Streams server entry is written to `.chromatis/app/entry.server.tsx` for the build and removed afterwards.
+
+## Bun / Docker mechanics
+
+The server entry and the server build are bundled with `Bun.build` into `.chromatis/image`, together with `build/client`; the image is built from the framework Dockerfile (`oven/bun`, runs as the `bun` user, exposes the configured port) by the generated `.chromatis/build/compose.json`. Embedded artifacts and configuration need no mounts. The compose service has a health check on `/_chromatis/health`, receives `PORT`, `PUBLIC_URL` and the secrets from `.chromatis/build/app.env` (mode 0600, git-ignored), and is started with `docker compose up --build -d`. The image contains no secret values.
+
+## Database
+
+When a module declares `database`, deploy applies pending migrations with `DATABASE_MIGRATION_URL` before uploading anything else; the running application uses `DATABASE_URL` only and refuses to start while the schema is behind. Provision the three PostgreSQL roles first (see the README and [SECURITY.md](SECURITY.md)). The migration and security tools read `src/modules/*` of the product package, so the package must ship those directories.

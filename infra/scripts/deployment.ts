@@ -7,13 +7,36 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import { generateArtifacts, frameworkRoot } from "./application.js";
+import { embedArtifacts, prepareArtifacts } from "./artifacts.js";
+import { syncEditorSchemas } from "./editorSchemas.js";
 import {
-  generateArtifacts,
-  frameworkRoot,
-  loadApplication,
-  loadHook,
-} from "./application.js";
+  cloudflareCredentials,
+  cloudflareEnvironment,
+  findWrangler,
+  workerDevUrl,
+} from "./cloudflare.js";
+import { bundleForBun } from "./virtualModules.js";
+import { writeDockerArtifacts } from "./dockerArtifacts.js";
+import { renderReport, runInstanceCommand } from "./instanceCommands.js";
+import { inspectInstance } from "./instanceInspect.js";
+import { formatProblem } from "./problems.js";
+import { commandEnvironment, targetOption } from "./commandOptions.js";
+import { resolveApplication, instanceMode } from "./instance.js";
+import { preflight } from "./preflight.js";
+import type {
+  BuildTarget,
+  ResolvedApplication,
+} from "./resolvedApplication.js";
 import {
+  applicationService,
+  credentialNames,
+  credentialService,
+  defaultSecretLookup,
+  requiredSecrets,
+} from "./secretStore.js";
+import {
+  APP_DIRECTORY,
   checkTooling,
   forbiddenFiles,
   generatedCloudflareEntry,
@@ -21,21 +44,11 @@ import {
 } from "./tooling.js";
 import { printPlan } from "./deployPlan.js";
 import { smokeTest } from "./smoke.js";
-import { promptSecret } from "./secretPrompt.js";
 import { secretCommand } from "./secretCommand.js";
 import { materializeExternalRoutes } from "./routeMaterialize.js";
 
 const root = process.cwd();
-const credentialService = "dev.chromatis.framework";
-const applicationService = (name: string) => `dev.chromatis.${name}`;
-const credentialNames = [
-  "CLOUDFLARE_API_TOKEN",
-  "CLOUDFLARE_ACCOUNT_ID",
-] as const;
-const wranglerPath = path.join(
-  frameworkRoot,
-  "node_modules/wrangler/bin/wrangler.js",
-);
+const wranglerPath = findWrangler(root);
 
 function run(
   command: string,
@@ -55,163 +68,31 @@ function run(
   }
 }
 
-async function secretValue(
-  service: string,
-  name: string,
-): Promise<string | null> {
-  return Bun.secrets.get({ service, name });
-}
-
-async function credentials(prompt: boolean): Promise<Record<string, string>> {
-  const result: Record<string, string> = {};
-  for (const name of credentialNames) {
-    let value = await secretValue(credentialService, name);
-    if (!value && prompt) {
-      value = await promptSecret(name);
-      if (!value || /[\r\n]/.test(value)) {
-        throw new Error(`Invalid ${name}`);
-      }
-      await Bun.secrets.set({ service: credentialService, name, value });
-    }
-    if (!value) {
-      throw new Error(`${name} missing; run bun run secret`);
-    }
-    result[name] = value;
-  }
-  return result;
-}
-
-function cloudflareEnvironment(
-  values: Record<string, string>,
-): NodeJS.ProcessEnv {
-  return {
-    ...process.env,
-    CLOUDFLARE_API_TOKEN: values.CLOUDFLARE_API_TOKEN,
-    CLOUDFLARE_ACCOUNT_ID: values.CLOUDFLARE_ACCOUNT_ID,
-  };
-}
-
-async function checkCloudflare(values: Record<string, string>): Promise<void> {
-  const response = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(values.CLOUDFLARE_ACCOUNT_ID ?? "")}/workers/scripts`,
-    {
-      headers: { Authorization: `Bearer ${values.CLOUDFLARE_API_TOKEN}` },
-    },
-  );
-  if (!response.ok) {
-    throw new Error(
-      "Cloudflare credentials or account failed validation; run bun run secret to define CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID",
-    );
-  }
-}
-
-async function requiredSecrets(
-  names: readonly string[],
-  service: string,
-): Promise<Record<string, string>> {
-  const result: Record<string, string> = {};
-  for (const name of names) {
-    const value = await secretValue(service, name);
-    if (!value) {
-      throw new Error(`${name} missing; run bun run secret`);
-    }
-    result[name] = value;
-  }
-  return result;
-}
-
-async function doctor(
-  target: "cloudflare" | "docker",
-  offline = false,
-  prebuild = false,
-): Promise<void> {
-  const app = loadApplication(root);
-  const failures = [
-    ...checkTooling(root),
-    ...forbiddenFiles().map(
-      (file) => `${file} is forbidden; remove it and run bun run init`,
-    ),
-  ];
-  const assets = path.join(root, "build/client");
-  if (!prebuild && !existsSync(assets)) {
-    failures.push("build/client missing; run bun run build");
-  }
-  if (!offline) {
-    if (
-      target === "cloudflare" &&
-      (new URL(app.publicUrl).hostname === "example.com" ||
-        new URL(app.publicUrl).hostname.endsWith(".example.com"))
-    ) {
-      failures.push(
-        "publicUrl in chromatis.toml is an example domain; set the real URL and run bun run doctor --target cloudflare",
-      );
-    }
-    try {
-      await requiredSecrets(
-        [
-          ...app.secrets,
-          ...(app.postgresql ? ["DATABASE_URL", "DATABASE_MIGRATION_URL"] : []),
-        ],
-        applicationService(app.name),
-      );
-    } catch (error) {
-      failures.push((error as Error).message);
-    }
-    if (target === "cloudflare") {
-      try {
-        await checkCloudflare(await credentials(false));
-      } catch (error) {
-        failures.push((error as Error).message);
-      }
-    } else if (
-      spawnSync("docker", ["version", "--format", "{{.Server.Version}}"], {
-        stdio: "ignore",
-      }).status !== 0
-    ) {
-      failures.push(
-        "Docker unavailable; install and start Docker, then run bun run doctor --target docker",
-      );
-    }
-  }
-  const artifacts = generateArtifacts(root, app, false);
-  if (
-    target === "cloudflare" &&
-    !offline &&
-    !prebuild &&
-    failures.length === 0
-  ) {
-    const values = await credentials(false);
-    const result = spawnSync(
-      "bun",
-      [
-        wranglerPath,
-        "deploy",
-        "--dry-run",
-        "--config",
-        artifacts.deployWranglerPath,
-      ],
-      { cwd: root, env: cloudflareEnvironment(values), stdio: "ignore" },
-    );
-    if (result.status !== 0) {
-      failures.push(
-        "Generated Wrangler config invalid; run bun run build --target cloudflare",
-      );
-    }
-  }
-  if (failures.length) {
+function assertReady(failures: readonly string[]): void {
+  if (failures.length > 0) {
     throw new Error(failures.join("\n"));
   }
-  console.info(`[doctor] ${target}: ready`);
 }
 
-function build(target: "cloudflare" | "docker") {
-  const app = loadApplication(root);
+/**
+ * Lifecycle after config validation: run contributions, validate artifacts,
+ * embed exactly those directories, then build the app for `target`.
+ */
+async function buildApp(
+  app: ResolvedApplication,
+  target: BuildTarget,
+  prepared = false,
+) {
+  if (!prepared) {
+    await prepareArtifacts(root, app);
+  }
   generateArtifacts(root, app);
-  const entry = path.join(root, "app/entry.server.tsx");
+  embedArtifacts(root, app);
+  const entry = path.join(root, APP_DIRECTORY, "entry.server.tsx");
   if (target === "cloudflare") {
     if (existsSync(entry)) {
       throw new Error(
-        "app/entry.server.tsx must be framework-generated; remove it and run bun run build",
+        `${APP_DIRECTORY}/entry.server.tsx must be framework-generated; remove it and run chromatis build`,
       );
     }
     writeFileSync(entry, generatedCloudflareEntry);
@@ -242,137 +123,97 @@ function build(target: "cloudflare" | "docker") {
   if (target === "docker") {
     const image = path.join(root, ".chromatis/image");
     mkdirSync(image, { recursive: true });
-    run("bun", [
-      "build",
+    await bundleForBun(
+      root,
       path.join(root, ".chromatis/build/bun.ts"),
-      "--target=bun",
-      "--outfile",
       path.join(image, "server.js"),
-    ]);
+    );
     cpSync(path.join(root, "build"), path.join(image, "build"), {
       recursive: true,
       force: true,
     });
-    run("bun", [
-      "build",
+    await bundleForBun(
+      root,
       path.join(root, "build/server/index.js"),
-      "--target=bun",
-      "--outfile",
       path.join(image, "build/server/index.js"),
-    ]);
+    );
   }
   return generateArtifacts(root, app);
 }
 
-function writeDockerArtifacts(
-  app: ReturnType<typeof loadApplication>,
-  values: Record<string, string>,
-  output: string,
-): string {
-  const envPath = path.join(output, "app.env");
-  writeFileSync(
-    envPath,
-    `${Object.entries({
-      PORT: String(app.port),
-      PUBLIC_URL: app.publicUrl,
-      ...app.variables,
-      ...values,
-      ...Object.fromEntries(
-        Object.entries(app.contentMounts).map(([name, source]) => [
-          `CONTENT_${name.toUpperCase().replaceAll("-", "_")}_DIR`,
-          `/content/${name}/${path.basename(source)}`,
-        ]),
-      ),
-    })
-      .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
-      .join("\n")}\n`,
-    { mode: 0o600 },
+/** `chromatis build`: ends with the checks that need no secrets or network. */
+async function build(app: ResolvedApplication, target: BuildTarget) {
+  const generated = await buildApp(app, target);
+  assertReady(
+    await preflight({
+      root,
+      app,
+      target,
+      phase: "all",
+      level: "static",
+      deployWranglerPath: generated.deployWranglerPath,
+    }),
   );
-  const compose = {
-    services: {
-      app: {
-        build: {
-          context: path.join(root, ".chromatis/image"),
-          dockerfile: path.join(frameworkRoot, "infra/deploy/Dockerfile"),
-          args: { APP_PORT: String(app.port) },
-        },
-        image: `${app.name}:chromatis`,
-        env_file: [envPath],
-        ports: [`${app.port}:${app.port}`],
-        volumes: Object.entries(app.contentMounts).map(([name, source]) => ({
-          type: "bind",
-          source: path.resolve(root, source),
-          target: `/content/${name}/${path.basename(source)}`,
-          read_only: true,
-        })),
-        healthcheck: {
-          test: [
-            "CMD",
-            "bun",
-            "-e",
-            `fetch('http://localhost:${app.port}/_chromatis/health').then(r=>process.exit(r.ok?0:1))`,
-          ],
-          interval: "30s",
-          timeout: "5s",
-          retries: 3,
-        },
-      },
-    },
-  };
-  const composePath = path.join(output, "compose.json");
-  writeFileSync(composePath, `${JSON.stringify(compose, null, 2)}\n`);
-  return composePath;
+  return generated;
 }
 
 async function deploy(
-  target: "cloudflare" | "docker",
+  app: ResolvedApplication,
+  target: BuildTarget,
   dryRun: boolean,
+  offline: boolean,
 ): Promise<void> {
-  const app = loadApplication(root);
-  if (checkTooling(root).length || forbiddenFiles().length) {
-    await doctor(target, true);
-  }
-  await loadHook(root, app);
+  const level = offline ? "static" : "full";
   if (!dryRun) {
-    generateArtifacts(root, app);
     run("bun", ["run", "check"]);
-    if (target === "cloudflare") {
-      await credentials(true);
-    }
-    await doctor(target, false, true);
   }
-  const artifacts = build(target);
+  await prepareArtifacts(root, app);
+  // The hook is imported by the preflight and needs the virtual modules.
+  generateArtifacts(root, app);
+  embedArtifacts(root, app);
+  if (target === "cloudflare" && !dryRun && !offline) {
+    await cloudflareCredentials(true);
+  }
+  assertReady(await preflight({ root, app, target, phase: "pre", level }));
+  const artifacts = await buildApp(app, target, true);
+  assertReady(
+    await preflight({
+      root,
+      app,
+      target,
+      phase: "post",
+      level,
+      deployWranglerPath: artifacts.deployWranglerPath,
+    }),
+  );
   printPlan(app, target, dryRun, artifacts);
   if (dryRun) {
     if (target === "docker") {
-      writeDockerArtifacts(app, {}, artifacts.output);
+      writeDockerArtifacts(root, app, {}, artifacts.output);
     }
     return;
   }
-  const values = await requiredSecrets(
-    [
-      ...app.secrets,
-      ...(app.postgresql ? ["DATABASE_URL", "DATABASE_MIGRATION_URL"] : []),
-    ],
-    applicationService(app.name),
-  );
+  const service = applicationService(app.name);
+  const values = await requiredSecrets(app.secrets, service);
   if (app.postgresql) {
-    run("bun", ["run", "db", "apply"], {
-      ...process.env,
-      DATABASE_URL: values.DATABASE_URL,
-      DATABASE_MIGRATION_URL: values.DATABASE_MIGRATION_URL,
-    });
+    const { runDbMigrations } = await import("./dbMigrations.ts");
+    await runDbMigrations(
+      values.DATABASE_URL ?? "",
+      values.DATABASE_MIGRATION_URL ?? "",
+      { applicationRoot: app.packageRoot },
+    );
     delete values.DATABASE_MIGRATION_URL;
   }
   for (const name of app.optionalSecrets) {
-    const value = await secretValue(applicationService(app.name), name);
+    const value = await defaultSecretLookup(service, name);
     if (value) {
       values[name] = value;
     }
   }
+  let cfCredentials: Record<string, string> | undefined;
   if (target === "cloudflare") {
-    const cf = await credentials(false);
-    await doctor(target);
+    const cf = await cloudflareCredentials(false);
+    cfCredentials = cf;
     for (const [name, value] of Object.entries(values)) {
       const child = spawnSync(
         "bun",
@@ -401,50 +242,70 @@ async function deploy(
       cloudflareEnvironment(cf),
     );
   } else {
-    const compose = writeDockerArtifacts(app, values, artifacts.output);
+    const compose = writeDockerArtifacts(root, app, values, artifacts.output);
     run("docker", ["compose", "-f", compose, "up", "--build", "-d"]);
   }
-  await smokeTest(root, app, target);
+  await smokeTest(
+    app,
+    target,
+    target === "cloudflare" && cfCredentials
+      ? () => workerDevUrl(app.name, cfCredentials)
+      : undefined,
+  );
 }
 
-export async function main(): Promise<void> {
-  const [command, ...args] = process.argv.slice(2);
-  if (command === "init") {
-    repairTooling(root);
-    if (existsSync(path.join(root, "chromatis.toml"))) {
-      generateArtifacts(root, loadApplication(root));
-    }
-    console.info("Canonical tooling stubs repaired");
+/**
+ * Prints the instance diagnostics, then runs the deployment preflight. Invalid
+ * configuration is reported with the diagnostics instead of aborting early.
+ */
+async function doctorCommand(args: string[]): Promise<void> {
+  const environment = commandEnvironment("doctor", args);
+  const report = await inspectInstance(root, environment);
+  const failures = report.problems.map(formatProblem);
+  if (report.problems.length === 0) {
+    const app = await resolveApplication(root, environment);
+    const generated = generateArtifacts(root, app, false);
+    failures.push(
+      ...(await preflight({
+        root,
+        app,
+        target: targetOption(args, app.target),
+        phase: "all",
+        level: args.includes("--offline") ? "static" : "full",
+        deployWranglerPath: generated.deployWranglerPath,
+      })),
+    );
+  }
+  if (args.includes("--json")) {
+    console.info(JSON.stringify({ ...report, readiness: failures }, null, 2));
+    process.exitCode = failures.length ? 1 : 0;
     return;
   }
-  if (command === "secret") {
-    await secretCommand(args, loadApplication(root), {
-      credentialNames,
-      credentialService,
-      applicationService,
-    });
-    return;
-  }
-  const app = loadApplication(root);
-  const position = args.indexOf("--target");
-  const chosen = position >= 0 ? args[position + 1] : app.target;
-  if (chosen !== "cloudflare" && chosen !== "docker") {
-    throw new Error("--target must be cloudflare or docker");
-  }
+  console.info(renderReport(report));
+  assertReady(failures);
+  console.info("[doctor] ready");
+}
+
+/** Commands that act on a resolved application. */
+async function applicationCommand(
+  command: string,
+  args: string[],
+): Promise<void> {
+  const app = await resolveApplication(root, commandEnvironment(command, args));
+  const target = targetOption(args, app.target);
   if (command === "build") {
-    build(chosen);
-    return;
-  }
-  if (command === "doctor") {
-    await doctor(chosen);
-    return;
-  }
-  if (command === "deploy") {
-    await deploy(chosen, args.includes("--dry-run"));
-    return;
-  }
-  if (command === "dev") {
+    await build(app, target);
+  } else if (command === "deploy") {
+    await deploy(
+      app,
+      target,
+      args.includes("--dry-run"),
+      args.includes("--offline"),
+    );
+  } else {
+    await prepareArtifacts(root, app);
     generateArtifacts(root, app);
+    embedArtifacts(root, app);
     run(
       "bun",
       [
@@ -456,25 +317,44 @@ export async function main(): Promise<void> {
       ],
       { ...process.env, REACT_ROUTER_ROOT: root },
     );
-    return;
   }
-  if (command === "check-tooling") {
-    const issues = [...checkTooling(root), ...forbiddenFiles()];
-    if (issues.length) {
-      throw new Error(issues.join("\n"));
-    }
-    return;
-  }
-  throw new Error(
-    "usage: deployment <init|check-tooling|build|dev|doctor|deploy|secret>",
-  );
 }
 
-if (import.meta.main) {
-  main().catch((error: unknown) => {
-    console.error(
-      `[chromatis] ${error instanceof Error ? error.message : "Command failed"}`,
+export async function main(): Promise<void> {
+  const [command = "", ...args] = process.argv.slice(2);
+  if (command === "init") {
+    repairTooling(root);
+    if (instanceMode(root) !== "none") {
+      // First: editor help matters most while the configuration is incomplete.
+      for (const problem of (await syncEditorSchemas(root)).problems) {
+        console.warn(`[chromatis] editor schemas: ${formatProblem(problem)}`);
+      }
+      generateArtifacts(
+        root,
+        await resolveApplication(root, commandEnvironment(command, args)),
+      );
+    }
+    console.info("Canonical tooling stubs repaired");
+  } else if (command === "secret") {
+    const app = await resolveApplication(
+      root,
+      commandEnvironment(command, args),
     );
-    process.exitCode = 1;
-  });
+    await secretCommand(args, app, {
+      credentialNames,
+      credentialService,
+      applicationService,
+    });
+  } else if (command === "check-tooling") {
+    const issues = [...checkTooling(root), ...forbiddenFiles(root)];
+    assertReady(issues);
+  } else if (command === "doctor") {
+    await doctorCommand(args);
+  } else if (["build", "deploy", "dev"].includes(command)) {
+    await applicationCommand(command, args);
+  } else if (!(await runInstanceCommand(command, args, root))) {
+    throw new Error(
+      "usage: chromatis <check|fix|inspect|init|check-tooling|build|dev|doctor|deploy|secret>",
+    );
+  }
 }

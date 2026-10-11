@@ -1,3 +1,2 @@
 node_modules
-/demo-app/.react-router/
-/demo-app/build/
+/.e2e/

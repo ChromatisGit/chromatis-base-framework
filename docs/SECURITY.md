@@ -176,6 +176,8 @@ per-User identities or cryptographically protected context.
 
 ## Tooling
 
+These are scripts of `@chromatis/base` (`infra/scripts/db.ts`, `security.ts`). They act on `src/modules/*` of the directory they run in, which is the product package; a product exposes them as package scripts that run `bun node_modules/@chromatis/base/infra/scripts/<tool>.ts`.
+
 ```sh
 bun run security:check      # part of `bun run check`; no database needed
 bun run security:describe   # central overview of every table's access rules

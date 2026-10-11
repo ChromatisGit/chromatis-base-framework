@@ -1,44 +1,25 @@
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import {
-  parseApplicationDeclaration,
-  type ApplicationDeclaration,
-} from "../../src/declaration.js";
 import type { ServerHook } from "../../src/server.js";
-import { writeRouterConfig } from "./tooling.js";
+import type { ResolvedApplication } from "./resolvedApplication.js";
+import { writeAppDirectory } from "./appDirectory.js";
+import { registerVirtualModules, writeConfigModule } from "./virtualModules.js";
+import { writeGeneratedTooling, writeRouterConfig } from "./tooling.js";
 
 export const frameworkRoot = path.resolve(import.meta.dir, "../..");
 
-export function loadApplication(root = process.cwd()): ApplicationDeclaration {
-  const file = path.join(root, "chromatis.toml");
-  if (!existsSync(file)) {
-    throw new Error(
-      "chromatis.toml is missing; add the application declaration",
-    );
-  }
-  return parseApplicationDeclaration(readFileSync(file, "utf8"));
-}
-
 export async function loadHook(
-  root: string,
-  declaration: ApplicationDeclaration,
+  app: ResolvedApplication,
 ): Promise<ServerHook | undefined> {
-  if (!declaration.serverHook) {
+  if (!app.serverHook) {
     return undefined;
   }
-  const file = path.resolve(root, declaration.serverHook);
-  if (!file.startsWith(`${root}${path.sep}`) || !existsSync(file)) {
+  if (!existsSync(app.serverHook)) {
     throw new Error("serverHook must name an existing application file");
   }
-  const module = (await import(pathToFileURL(file).href)) as {
+  registerVirtualModules(app.instanceRoot);
+  const module = (await import(pathToFileURL(app.serverHook).href)) as {
     default?: ServerHook;
   };
   if (!module.default || !Array.isArray(module.default.definitions)) {
@@ -47,11 +28,9 @@ export async function loadHook(
   const actual = module.default.definitions
     .map((definition) => definition.kind)
     .sort();
-  if (
-    JSON.stringify(actual) !== JSON.stringify([...declaration.runtime].sort())
-  ) {
+  if (JSON.stringify(actual) !== JSON.stringify([...app.runtime].sort())) {
     throw new Error(
-      "serverHook definitions must match chromatis.toml runtime kinds",
+      "serverHook definitions must match the declared runtime kinds",
     );
   }
   return module.default;
@@ -65,8 +44,6 @@ type Migration = {
 type Ledger = { migrations: Migration[] };
 
 const LEDGER_FILE = ".chromatis/runtime-migrations.json";
-// Applications created before the ledger moved keep it here until rebuilt.
-const LEGACY_LEDGER_FILE = ".chromatis-runtime-migrations.json";
 
 export function migrationPlan(
   root: string,
@@ -74,27 +51,25 @@ export function migrationPlan(
   persist: boolean,
 ): Migration[] {
   const file = path.join(root, LEDGER_FILE);
-  const legacy = path.join(root, LEGACY_LEDGER_FILE);
-  const source = existsSync(file) ? file : legacy;
-  const ledger: Ledger = existsSync(source)
-    ? (JSON.parse(readFileSync(source, "utf8")) as Ledger)
+  const ledger: Ledger = existsSync(file)
+    ? (JSON.parse(readFileSync(file, "utf8")) as Ledger)
     : { migrations: [] };
   if (!Array.isArray(ledger.migrations)) {
     throw new Error(
-      `Invalid runtime migration ledger; restore ${LEDGER_FILE} from Git and run bun run build`,
+      `Invalid runtime migration ledger; restore ${LEDGER_FILE} from Git and run chromatis build`,
     );
   }
   const current = new Set<string>();
   for (const [index, migration] of ledger.migrations.entries()) {
     if (migration.tag !== `v${index + 1}`) {
       throw new Error(
-        `Runtime migration tags are inconsistent; restore ${LEDGER_FILE} from Git and run bun run build`,
+        `Runtime migration tags are inconsistent; restore ${LEDGER_FILE} from Git and run chromatis build`,
       );
     }
     for (const name of migration.new_classes ?? []) {
       if (current.has(name)) {
         throw new Error(
-          `Runtime migration ${migration.tag} adds ${name} twice; restore the ledger from Git and run bun run build`,
+          `Runtime migration ${migration.tag} adds ${name} twice; restore the ledger from Git and run chromatis build`,
         );
       }
       current.add(name);
@@ -102,7 +77,7 @@ export function migrationPlan(
     for (const name of migration.deleted_classes ?? []) {
       if (!current.has(name)) {
         throw new Error(
-          `Runtime migration ${migration.tag} deletes unknown ${name}; restore the ledger from Git and run bun run build`,
+          `Runtime migration ${migration.tag} deletes unknown ${name}; restore the ledger from Git and run chromatis build`,
         );
       }
       current.delete(name);
@@ -130,44 +105,40 @@ export const runtimeClass = (kind: string): string =>
 export const runtimeBinding = (kind: string): string =>
   `RUNTIME_${kind.replaceAll("-", "_").toUpperCase()}`;
 
-function contentFiles(directory: string, prefix = ""): Record<string, string> {
-  const files: Record<string, string> = {};
-  for (const entry of readdirSync(directory).sort()) {
-    const relative = path.posix.join(prefix, entry);
-    const file = path.join(directory, entry);
-    if (statSync(file).isDirectory()) {
-      Object.assign(files, contentFiles(file, relative));
-    } else if (statSync(file).isFile()) {
-      files[relative] = readFileSync(file).toString("base64");
-    }
-  }
-  return files;
+/**
+ * Facts the Vite config needs. `src/vite.js` runs inside React Router's CLI and
+ * reads this file instead of re-deriving them from the instance.
+ */
+export function writeBuildContext(
+  output: string,
+  app: ResolvedApplication,
+): void {
+  writeFileSync(
+    path.join(output, "application.json"),
+    `${JSON.stringify(
+      {
+        serverHook: app.serverHook ?? null,
+        bundledPackages: app.bundledPackages,
+        allowedRoots: app.allowedRoots,
+      },
+      null,
+      2,
+    )}\n`,
+  );
 }
 
 export function generateArtifacts(
   root: string,
-  declaration: ApplicationDeclaration,
+  declaration: ResolvedApplication,
   persistMigrations = true,
 ) {
   const output = path.join(root, ".chromatis", "build");
   mkdirSync(output, { recursive: true });
-  const content = Object.fromEntries(
-    Object.entries(declaration.contentMounts).map(([name, source]) => {
-      const directory = path.resolve(root, source);
-      if (!existsSync(directory) || !statSync(directory).isDirectory()) {
-        throw new Error(`Content mount ${name} is missing: ${directory}`);
-      }
-      return [
-        name,
-        { basename: path.basename(directory), files: contentFiles(directory) },
-      ];
-    }),
-  );
-  writeFileSync(
-    path.join(output, "content.ts"),
-    `export const content: Record<string, { basename: string; files: Record<string, string> }> = ${JSON.stringify(content)};\n`,
-  );
   writeRouterConfig(root);
+  writeAppDirectory(root, declaration);
+  writeGeneratedTooling(root);
+  writeConfigModule(root, declaration);
+  writeBuildContext(output, declaration);
   const migrations = migrationPlan(
     root,
     declaration.runtime,
@@ -177,7 +148,7 @@ export function generateArtifacts(
     declaration.runtime.map((kind) => [kind, runtimeBinding(kind)]),
   );
   const hookImport = declaration.serverHook
-    ? JSON.stringify(path.resolve(root, declaration.serverHook))
+    ? JSON.stringify(declaration.serverHook)
     : undefined;
   const serverImport = JSON.stringify(
     path.join(frameworkRoot, "src/server.ts"),
@@ -221,7 +192,7 @@ export function generateArtifacts(
           migrations,
         }
       : {}),
-    vars: { PUBLIC_URL: declaration.publicUrl, ...declaration.variables },
+    vars: { PUBLIC_URL: declaration.publicUrl },
   };
   const wranglerPath = path.join(output, "wrangler.json");
   writeFileSync(wranglerPath, `${JSON.stringify(config, null, 2)}\n`);

@@ -92,14 +92,12 @@ export async function loadSchemaCatalog(
         new Set(row.columns as string[]),
       ]),
     ),
-    foreignKeys: keyRows.map(
-      (row): ForeignKey => ({
-        table: String(row.table_name),
-        columns: row.columns as string[],
-        referencedTable: String(row.referenced_table),
-        referencedColumns: row.referenced_columns as string[],
-      }),
-    ),
+    foreignKeys: keyRows.map((row): ForeignKey => ({
+      table: String(row.table_name),
+      columns: row.columns as string[],
+      referencedTable: String(row.referenced_table),
+      referencedColumns: row.referenced_columns as string[],
+    })),
   };
 }
 
