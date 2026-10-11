@@ -1,10 +1,11 @@
 import { createRequire } from "node:module";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { APP_DIRECTORY } from "./tooling.js";
 
 /** Inline package route re-exports while React Router splits their server exports. */
 export function materializeExternalRoutes(root: string): () => void {
-  const routes = path.join(root, "app/routes");
+  const routes = path.join(root, APP_DIRECTORY, "routes");
   if (!existsSync(routes)) {
     return () => {};
   }
@@ -42,7 +43,7 @@ export function materializeExternalRoutes(root: string): () => void {
   }
   try {
     visit(routes);
-    const appRoot = path.join(root, "app/root.tsx");
+    const appRoot = path.join(root, APP_DIRECTORY, "root.tsx");
     if (existsSync(appRoot)) {
       materialize(appRoot);
     }

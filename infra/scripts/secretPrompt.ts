@@ -14,7 +14,7 @@ export interface SecretTerminal {
 
 function requireTerminal(): void {
   if (!process.stdin.isTTY || !process.stdin.setRawMode) {
-    throw new Error("Run bun run secret in an interactive terminal");
+    throw new Error("Run chromatis secret in an interactive terminal");
   }
 }
 

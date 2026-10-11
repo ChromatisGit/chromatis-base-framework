@@ -1,4 +1,10 @@
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -23,17 +29,31 @@ export function forbiddenFiles(root = process.cwd()): string[] {
   return found;
 }
 
+/** Root files an instance keeps; they only point at the generated ones. */
 export const canonicalTsconfig = `{
+  "extends": "./.chromatis/tsconfig.json"
+}
+`;
+export const canonicalEslint = `export { default } from "./.chromatis/eslint.config.js";
+`;
+
+/** Generated under the git-ignored `.chromatis/`; rewritten by init, dev and build. */
+export const generatedTsconfig = `{
   "extends": "@chromatis/base/infra/tsconfig",
   "compilerOptions": {
     "types": ["node", "bun", "vite/client"],
-    "paths": { "chromatis-content": ["./.chromatis/build/content.ts"] },
-    "rootDirs": [".", "./.react-router/types"]
+    "rootDirs": ["..", "../.react-router/types"]
   },
-  "include": ["app", "src", "server", ".react-router/types/**/*"]
+  "include": [
+    "../app",
+    "../src",
+    "../server",
+    "../.react-router/types/**/*",
+    "types.d.ts"
+  ]
 }
 `;
-export const canonicalEslint = `import base from "@chromatis/base/infra/eslint";
+export const generatedEslint = `import base from "@chromatis/base/infra/eslint";
 
 export default [
   {
@@ -52,7 +72,16 @@ export default [
   },
 ];
 `;
-export const generatedRouterConfig = "export default { ssr: true };\n";
+/** Ambient types of the virtual modules; single source: src/virtual-modules.d.ts. */
+export const generatedTypes = readFileSync(
+  path.resolve(import.meta.dir, "../../src/virtual-modules.d.ts"),
+  "utf8",
+);
+
+/** Where Chromatis generates React Router's app directory (git-ignored). */
+export const APP_DIRECTORY = ".chromatis/app";
+
+export const generatedRouterConfig = `export default { ssr: true, appDirectory: ${JSON.stringify(APP_DIRECTORY)} };\n`;
 export const generatedCloudflareEntry = `import { ServerRouter, type EntryContext } from "react-router";
 import { renderToReadableStream } from "react-dom/server";
 
@@ -63,6 +92,7 @@ export default async function handleRequest(request: Request, status: number, he
 }
 `;
 
+/** Root files an instance keeps; they only point at the generated ones. */
 export function expectedTooling(): Readonly<Record<string, string>> {
   return {
     "tsconfig.json": canonicalTsconfig,
@@ -70,25 +100,46 @@ export function expectedTooling(): Readonly<Record<string, string>> {
   };
 }
 
+/** Files Chromatis generates for the instance under `.chromatis/`. */
+export function generatedTooling(): Readonly<Record<string, string>> {
+  return {
+    ".chromatis/tsconfig.json": generatedTsconfig,
+    ".chromatis/eslint.config.js": generatedEslint,
+    ".chromatis/types.d.ts": generatedTypes,
+  };
+}
+
 export function checkTooling(root = process.cwd()): string[] {
   const problems: string[] = [];
-  for (const [file, expected] of Object.entries(expectedTooling())) {
+  for (const [file, expected] of [
+    ...Object.entries(expectedTooling()),
+    ...Object.entries(generatedTooling()),
+  ]) {
     if (
       !existsSync(path.join(root, file)) ||
       readFileSync(path.join(root, file), "utf8") !== expected
     ) {
       problems.push(
-        `${file} differs from the framework stub; run bun run init`,
+        `${file} differs from the framework ${file.startsWith(".chromatis/") ? "output" : "stub"}; run chromatis init`,
       );
     }
   }
   return problems;
 }
 
+/** Writes the generated files only (no root stubs, no ignore rules). */
+export function writeGeneratedTooling(root: string): void {
+  for (const [file, content] of Object.entries(generatedTooling())) {
+    mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    writeFileSync(path.join(root, file), content);
+  }
+}
+
 export function repairTooling(root = process.cwd()): void {
   for (const [file, expected] of Object.entries(expectedTooling())) {
     writeFileSync(path.join(root, file), expected);
   }
+  writeGeneratedTooling(root);
   const ignorePath = path.join(root, ".gitignore");
   const ignore = existsSync(ignorePath) ? readFileSync(ignorePath, "utf8") : "";
   const additions = [

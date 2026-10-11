@@ -4,24 +4,28 @@ import { reactRouter } from "@react-router/dev/vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import path from "node:path";
 import { existsSync, readFileSync } from "node:fs";
-import { parse } from "smol-toml";
 
-function developmentRuntime(root) {
+/**
+ * Facts derived by `chromatis` before Vite starts (see writeBuildContext in
+ * infra/scripts/application.ts); Vite does not re-read instance configuration.
+ */
+function buildContext(root) {
+  const file = path.join(root, ".chromatis/build/application.json");
+  if (!existsSync(file)) {
+    return { serverHook: null, bundledPackages: [], allowedRoots: [] };
+  }
+  return JSON.parse(readFileSync(file, "utf8"));
+}
+
+function developmentRuntime(context) {
   return {
     name: "chromatis:development-runtime",
     configureServer(server) {
       return async () => {
-        const manifest = path.join(root, "chromatis.toml");
-        if (!existsSync(manifest)) {
+        if (typeof context.serverHook !== "string") {
           return;
         }
-        const declaration = parse(readFileSync(manifest, "utf8"));
-        if (typeof declaration.serverHook !== "string") {
-          return;
-        }
-        const hook = (
-          await server.ssrLoadModule(path.resolve(root, declaration.serverHook))
-        ).default;
+        const hook = (await server.ssrLoadModule(context.serverHook)).default;
         const { createBunRuntimeHost } = await server.ssrLoadModule(
           path.join(import.meta.dirname, "stateful/bun.ts"),
         );
@@ -42,12 +46,13 @@ function localDependencyRoots(root) {
 
 export async function createViteConfig() {
   const root = process.cwd();
+  const context = buildContext(root);
   const plugins = [
     reactRouter(),
     tsconfigPaths({ projects: [path.join(root, "tsconfig.json")] }),
   ];
   if (!process.env.CHROMATIS_BUILD_TARGET) {
-    plugins.push(developmentRuntime(root));
+    plugins.push(developmentRuntime(context));
   }
   if (process.env.CHROMATIS_BUILD_TARGET === "cloudflare") {
     const { cloudflare } = await import("@cloudflare/vite-plugin");
@@ -66,6 +71,7 @@ export async function createViteConfig() {
           root,
           path.resolve(import.meta.dirname, ".."),
           ...localDependencyRoots(root),
+          ...context.allowedRoots,
         ],
       },
     },
@@ -75,7 +81,8 @@ export async function createViteConfig() {
     },
     resolve: {
       alias: {
-        "chromatis-content": path.join(root, ".chromatis/build/content.ts"),
+        "chromatis-artifacts": path.join(root, ".chromatis/build/artifacts.ts"),
+        "chromatis-config": path.join(root, ".chromatis/build/config.ts"),
       },
       dedupe: [
         "react",
@@ -85,9 +92,9 @@ export async function createViteConfig() {
         "@chromatis/base",
       ],
     },
-    ssr: { noExternal: ["studyluma", "@chromatis/base"] },
+    ssr: { noExternal: [...context.bundledPackages, "@chromatis/base"] },
     optimizeDeps: {
-      exclude: ["studyluma"],
+      exclude: context.bundledPackages,
       esbuildOptions: { jsx: "automatic" },
     },
     plugins,

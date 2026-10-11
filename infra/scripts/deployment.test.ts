@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { checkTooling, expectedTooling, repairTooling } from "./tooling.js";
 import { generateArtifacts, migrationPlan } from "./application.js";
 import { printPlan } from "./deployPlan.js";
-import { applicationDeclarationSchema } from "../../src/declaration.js";
+import type { ResolvedApplication } from "./resolvedApplication.js";
 
 const directories: string[] = [];
 afterEach(() => {
@@ -19,6 +19,33 @@ afterEach(() => {
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+function application(
+  overrides: Partial<ResolvedApplication> = {},
+): ResolvedApplication {
+  return {
+    name: "example",
+    instanceRoot: "/instance",
+    publicUrl: "https://example.com",
+    target: "cloudflare",
+    port: 3000,
+    environment: "production",
+    packageRoot: "/app",
+    postgresql: false,
+    runtime: [],
+    serverHook: undefined,
+    secrets: [],
+    optionalSecrets: [],
+    declaredSecrets: [],
+    shell: { root: undefined, routes: [], omitted: [] },
+    contributions: [],
+    artifacts: [],
+    moduleConfigs: {},
+    bundledPackages: [],
+    allowedRoots: [],
+    ...overrides,
+  };
+}
 
 function project(): string {
   const directory = mkdtempSync(path.join(tmpdir(), "chromatis-deployment-"));
@@ -33,7 +60,7 @@ test("canonical tooling accepts pristine stubs and rejects either modified stub"
   for (const [file, expected] of Object.entries(expectedTooling())) {
     writeFileSync(path.join(root, file), `${expected}modified\n`);
     expect(checkTooling(root)).toContain(
-      `${file} differs from the framework stub; run bun run init`,
+      `${file} differs from the framework stub; run chromatis init`,
     );
     repairTooling(root);
     expect(readFileSync(path.join(root, file), "utf8")).toBe(expected);
@@ -71,13 +98,8 @@ test("doctor input rejects a rewritten runtime migration tag", () => {
   );
 });
 
-test("dry-run plan names secrets and variables without showing their values", () => {
-  const app = applicationDeclarationSchema.parse({
-    name: "example",
-    publicUrl: "https://example.com",
-    secrets: ["API_KEY"],
-    variables: { DIRECTORY_URL: "SENTINEL_VARIABLE_VALUE" },
-  });
+test("dry-run plan names secrets without showing their values", () => {
+  const app = application({ secrets: ["API_KEY"] });
   const previous = console.info;
   let output = "";
   console.info = (value) => {
@@ -92,17 +114,12 @@ test("dry-run plan names secrets and variables without showing their values", ()
     console.info = previous;
   }
   expect(output).toContain("API_KEY");
-  expect(output).toContain("DIRECTORY_URL");
-  expect(output).not.toContain("SENTINEL_VARIABLE_VALUE");
+  expect(output).toContain("PUBLIC_URL");
 });
 
 test("fake secret values stay out of generated Worker and deployment files", () => {
   const root = project();
-  const app = applicationDeclarationSchema.parse({
-    name: "example",
-    publicUrl: "https://example.com",
-    secrets: ["API_KEY"],
-  });
+  const app = application({ secrets: ["API_KEY"] });
   const previous = process.env.API_KEY;
   process.env.API_KEY = "SENTINEL_SECRET_VALUE";
   try {

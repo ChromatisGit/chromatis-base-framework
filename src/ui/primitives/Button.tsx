@@ -2,11 +2,7 @@ import type { ButtonHTMLAttributes } from "react";
 import { cn } from "./cn.js";
 
 export type ButtonRole =
-  | "primary"
-  | "secondary"
-  | "accent"
-  | "ghost"
-  | "destructive";
+  "primary" | "secondary" | "accent" | "ghost" | "destructive";
 export type ButtonSize = "sm" | "md" | "lg";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

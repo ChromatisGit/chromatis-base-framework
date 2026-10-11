@@ -47,7 +47,7 @@ export function createFrameworkWorker<Service>(
           namespaces,
           hook.definitions,
         );
-        service = hook.createService(runtime, directoryEnvironment(env));
+        service = hook.createService(runtime, stringEnvironment(env));
       }
       if (
         hook &&
@@ -71,20 +71,15 @@ export function createFrameworkWorker<Service>(
   };
 }
 
-function directoryEnvironment(
+/** The string-valued bindings and environment variables, as the hook sees them. */
+function stringEnvironment(
   source: Record<string, unknown>,
 ): Record<string, string | undefined> {
-  const result = Object.fromEntries(
+  return Object.fromEntries(
     Object.entries(source).filter(
       (entry): entry is [string, string] => typeof entry[1] === "string",
     ),
   );
-  if (!(result.DIRECTORY_URL && result.DIRECTORY_KEY && result.PUBLIC_URL)) {
-    delete result.DIRECTORY_URL;
-    delete result.DIRECTORY_KEY;
-    delete result.PUBLIC_URL;
-  }
-  return result;
 }
 
 function staticFile(root: string, pathname: string): Response | undefined {
@@ -120,7 +115,7 @@ export async function startFrameworkBun<Service>(
   )) as ServerBuild;
   const handle = createRequestHandler(build, "production");
   const host = createBunRuntimeHost(hook?.definitions ?? []);
-  const service = hook?.createService(host, directoryEnvironment(process.env));
+  const service = hook?.createService(host, stringEnvironment(process.env));
   if (hook?.sweep && service !== undefined) {
     setInterval(() => void hook.sweep?.(service), 60_000).unref();
   }

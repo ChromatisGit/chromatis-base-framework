@@ -1,9 +1,5 @@
 export type DatabaseSetupPhase =
-  | "probe"
-  | "lock"
-  | "migrate"
-  | "ready"
-  | "failed";
+  "probe" | "lock" | "migrate" | "ready" | "failed";
 
 type DatabaseSetupErrorOptions = {
   message: string;

@@ -8,7 +8,7 @@ import type { SecretTerminal } from "./secretPrompt";
 
 const entries: SecretEntry[] = [
   { name: "TOKEN", kind: "credential", service: "framework" },
-  { name: "KEY", kind: "optional", service: "app" },
+  { name: "KEY", kind: "production", service: "app" },
 ];
 
 function fakeStore(initial: Record<string, string> = {}) {
@@ -48,7 +48,7 @@ test("lists every secret with its state and kind", async () => {
   expect(shown[0]?.[0]).toContain("● defined");
   expect(shown[0]?.[0]).toContain("Cloudflare credential");
   expect(shown[0]?.[1]).toContain("○ not defined");
-  expect(shown[0]?.[1]).toContain("optional");
+  expect(shown[0]?.[1]).toContain("required in production");
 });
 
 test("sets, replaces and removes a secret", async () => {

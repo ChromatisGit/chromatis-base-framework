@@ -1,7 +1,7 @@
-import type { ApplicationDeclaration } from "../../src/declaration.js";
+import type { ResolvedApplication } from "./resolvedApplication.js";
 
 export function printPlan(
-  app: ApplicationDeclaration,
+  app: ResolvedApplication,
   target: "cloudflare" | "docker",
   dryRun: boolean,
   artifacts: { output: string; migrations: readonly { tag: string }[] },
@@ -17,10 +17,11 @@ export function printPlan(
           (kind) => `RUNTIME_${kind.toUpperCase().replaceAll("-", "_")}`,
         ),
         migrations: artifacts.migrations.map(({ tag }) => tag),
-        variables: ["PUBLIC_URL", ...Object.keys(app.variables)],
+        variables: ["PUBLIC_URL"],
         secrets: [...app.secrets, ...app.optionalSecrets],
-        contentMounts: Object.keys(app.contentMounts),
-        artifacts: artifacts.output,
+        contributions: app.contributions.map(({ id }) => id),
+        artifacts: app.artifacts.map(({ id }) => id),
+        generated: artifacts.output,
         dryRun,
       },
       null,

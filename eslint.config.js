@@ -9,8 +9,7 @@ export default [
   {
     ignores: [
       "node_modules/**",
-      "demo-app/build/**",
-      "demo-app/.react-router/**",
+      ".e2e/**",
       "src/**/.client/**",
       "src/**/.server/**",
     ],

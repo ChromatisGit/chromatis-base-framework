@@ -95,7 +95,9 @@ runRuntimeContractTests("Cloudflare Runtime Host (workerd)", async () => {
       if (!ws) {
         throw new Error(`upgrade failed: ${res.status} ${await res.text()}`);
       }
-      ws.accept();
+      // Accept only after the caller has attached its listeners, or a message
+      // sent right at connection can be delivered to nobody.
+      setTimeout(() => ws.accept(), 0);
       return ws as never;
     },
     async closes() {

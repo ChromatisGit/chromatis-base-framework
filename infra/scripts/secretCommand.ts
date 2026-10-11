@@ -3,14 +3,18 @@ import {
   type SecretEntry,
   type SecretKind,
 } from "./secretMenu.js";
+import type { DeclaredSecret, SecretRequirement } from "./moduleSet.js";
 import { createSecretTerminal } from "./secretPrompt.js";
 
 interface SecretApplication {
   name: string;
-  postgresql: boolean;
-  secrets: readonly string[];
-  optionalSecrets: readonly string[];
+  declaredSecrets: readonly DeclaredSecret[];
 }
+
+const KIND: Record<SecretRequirement, SecretKind> = {
+  always: "required",
+  production: "production",
+};
 
 interface SecretServices {
   credentialNames: readonly string[];
@@ -18,7 +22,27 @@ interface SecretServices {
   applicationService: (name: string) => string;
 }
 
-/** `bun run secret`: an interactive menu; values never travel as arguments. */
+/** Every secret the menu manages: Cloudflare credentials, then the declared secrets. */
+export function secretEntries(
+  app: SecretApplication,
+  services: SecretServices,
+): SecretEntry[] {
+  const applicationService = services.applicationService(app.name);
+  return [
+    ...services.credentialNames.map((name): SecretEntry => ({
+      name,
+      kind: "credential",
+      service: services.credentialService,
+    })),
+    ...app.declaredSecrets.map((secret): SecretEntry => ({
+      name: secret.name,
+      kind: KIND[secret.requirement],
+      service: applicationService,
+    })),
+  ];
+}
+
+/** `chromatis secret`: an interactive menu; values never travel as arguments. */
 export async function secretCommand(
   args: readonly string[],
   app: SecretApplication,
@@ -26,31 +50,11 @@ export async function secretCommand(
 ): Promise<void> {
   if (args.length > 0) {
     throw new Error(
-      "bun run secret takes no arguments; values are only entered in the menu so they never reach shell history",
+      "chromatis secret takes no arguments; values are only entered in the menu so they never reach shell history",
     );
   }
-  const applicationService = services.applicationService(app.name);
-  const entry = (
-    name: string,
-    kind: SecretKind,
-    service: string,
-  ): SecretEntry => ({ name, kind, service });
-  const database = app.postgresql
-    ? ["DATABASE_URL", "DATABASE_MIGRATION_URL"]
-    : [];
-  const entries = [
-    ...services.credentialNames.map((name) =>
-      entry(name, "credential", services.credentialService),
-    ),
-    ...[...app.secrets, ...database].map((name) =>
-      entry(name, "required", applicationService),
-    ),
-    ...app.optionalSecrets.map((name) =>
-      entry(name, "optional", applicationService),
-    ),
-  ];
   await runSecretMenu(
-    entries,
+    secretEntries(app, services),
     {
       get: (service, name) => Bun.secrets.get({ service, name }),
       set: (service, name, value) => Bun.secrets.set({ service, name, value }),
