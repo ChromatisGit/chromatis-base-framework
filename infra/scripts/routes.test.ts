@@ -104,7 +104,18 @@ describe("product routes", () => {
     expect(routes).toContain('"path": ":code"');
     expect(routes).toContain("export default product;");
     expect(read("../../react-router.config.ts")).toBe(
-      'export default { ssr: true, appDirectory: ".chromatis/app" };\n',
+      `export default {
+  ssr: true,
+  appDirectory: ".chromatis/app",
+  future: {
+    v8_middleware: true,
+    v8_splitRouteModules: true,
+    v8_viteEnvironmentApi: true,
+    v8_passThroughRequests: true,
+    v8_trailingSlashAwareDataRequests: true,
+  },
+};
+`,
     );
   });
 });

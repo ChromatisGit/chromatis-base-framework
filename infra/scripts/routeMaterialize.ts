@@ -1,9 +1,14 @@
 import { createRequire } from "node:module";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { inlinePackageReexport } from "../../src/inline-route.js";
 import { APP_DIRECTORY } from "./tooling.js";
 
-/** Inline package route re-exports while React Router splits their server exports. */
+/**
+ * Inline package route re-exports on disk while React Router builds, so it can
+ * split their server exports. `chromatis dev` inlines in memory instead, in
+ * `src/vite.js`.
+ */
 export function materializeExternalRoutes(root: string): () => void {
   const routes = path.join(root, APP_DIRECTORY, "routes");
   if (!existsSync(routes)) {
@@ -13,20 +18,12 @@ export function materializeExternalRoutes(root: string): () => void {
   const originals = new Map<string, string>();
   function materialize(file: string): void {
     const original = readFileSync(file, "utf8");
-    const match = original
-      .trim()
-      .match(/^export\s*\{[^}]+\}\s*from\s*["']([^"']+)["'];?$/s);
-    if (!match?.[1] || match[1].startsWith(".")) {
+    const inlined = inlinePackageReexport(original, require);
+    if (!inlined) {
       return;
     }
-    const source = require.resolve(match[1]);
-    const code = readFileSync(source, "utf8").replace(
-      /(\bfrom\s*|\bimport\s*)["'](\.{1,2}\/[^"']+)["']/g,
-      (_all, prefix: string, relative: string) =>
-        `${prefix}${JSON.stringify(path.resolve(path.dirname(source), relative))}`,
-    );
     originals.set(file, original);
-    writeFileSync(file, code);
+    writeFileSync(file, inlined.code);
   }
   function visit(directory: string): void {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {

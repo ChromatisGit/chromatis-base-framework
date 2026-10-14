@@ -1,9 +1,11 @@
 /* global process */
-import { defineConfig } from "vite";
+import { defineConfig, searchForWorkspaceRoot } from "vite";
 import { reactRouter } from "@react-router/dev/vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import path from "node:path";
 import { existsSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { inlinePackageReexport } from "./inline-route.js";
 
 /**
  * Facts derived by `chromatis` before Vite starts (see writeBuildContext in
@@ -35,6 +37,53 @@ function developmentRuntime(context) {
   };
 }
 
+/**
+ * Serve the generated one-line route wrappers with the package route inlined, as
+ * `materializeExternalRoutes` does on disk for builds. Without it React Router
+ * strips `loader` from the wrapper only, and the client imports the package
+ * module with its `.server` imports.
+ */
+function inlinePackageRoutes(root) {
+  const appDirectory = path.join(root, ".chromatis/app") + path.sep;
+  const instanceRequire = createRequire(path.join(root, "package.json"));
+  // Vite resolves extensionless specifiers, `require.resolve` does not.
+  const require = {
+    resolve(specifier) {
+      try {
+        return instanceRequire.resolve(specifier);
+      } catch (error) {
+        for (const extension of [".tsx", ".ts", ".jsx", ".js"]) {
+          try {
+            return instanceRequire.resolve(specifier + extension);
+          } catch {
+            // Try the next extension.
+          }
+        }
+        throw error;
+      }
+    },
+  };
+  return {
+    name: "chromatis:inline-package-routes",
+    enforce: "pre",
+    load(id) {
+      const file = id.split("?")[0];
+      if (!file.startsWith(appDirectory) || !/\.[cm]?[jt]sx?$/.test(file)) {
+        return;
+      }
+      const inlined = inlinePackageReexport(
+        readFileSync(file, "utf8"),
+        require,
+      );
+      if (!inlined) {
+        return;
+      }
+      this.addWatchFile(inlined.source);
+      return { code: inlined.code, map: null };
+    },
+  };
+}
+
 function localDependencyRoots(root) {
   const manifest = JSON.parse(
     readFileSync(path.join(root, "package.json"), "utf8"),
@@ -52,7 +101,7 @@ export async function createViteConfig() {
     tsconfigPaths({ projects: [path.join(root, "tsconfig.json")] }),
   ];
   if (!process.env.CHROMATIS_BUILD_TARGET) {
-    plugins.push(developmentRuntime(context));
+    plugins.push(inlinePackageRoutes(root), developmentRuntime(context));
   }
   if (process.env.CHROMATIS_BUILD_TARGET === "cloudflare") {
     const { cloudflare } = await import("@cloudflare/vite-plugin");
@@ -68,11 +117,28 @@ export async function createViteConfig() {
     server: {
       fs: {
         allow: [
+          searchForWorkspaceRoot(root),
           root,
           path.resolve(import.meta.dirname, ".."),
           ...localDependencyRoots(root),
           ...context.allowedRoots,
         ],
+      },
+    },
+    build: {
+      rollupOptions: {
+        onwarn(warning, defaultHandler) {
+          // Zod's explanatory comments quote `@__PURE__`, which Rollup tries to
+          // read as an annotation. The real annotations are unaffected and the
+          // comments are dropped either way, so the warning carries no signal.
+          if (
+            warning.code === "INVALID_ANNOTATION" &&
+            /[\\/]node_modules[\\/]zod[\\/]/.test(warning.id ?? "")
+          ) {
+            return;
+          }
+          defaultHandler(warning);
+        },
       },
     },
     environments: {
