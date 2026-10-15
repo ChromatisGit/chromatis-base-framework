@@ -26,6 +26,7 @@
     "./auth": "./src/auth.ts",
     "./config": "./src/config.ts",
     "./database": "./src/database.ts",
+    "./dev": "./src/dev.ts",
     "./db-migrations": "./infra/scripts/dbMigrations.ts",
     "./errors": "./src/errors.ts",
     "./log": "./src/log.ts",

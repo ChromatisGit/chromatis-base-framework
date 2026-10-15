@@ -88,7 +88,7 @@ async function databaseChecks(
 ): Promise<void> {
   const lookup = options.lookup ?? defaultSecretLookup;
   const url = await lookup(
-    applicationService(options.app.name),
+    applicationService(options.app.name, options.app.environment),
     "DATABASE_URL",
   );
   if (!url) {
@@ -130,7 +130,7 @@ async function targetChecks(
   }
   const missing = await missingSecrets(
     app.secrets,
-    applicationService(app.name),
+    applicationService(app.name, app.environment),
     lookup,
   );
   if (missing.length > 0) {

@@ -167,7 +167,10 @@ async function secretReports(
   const values = new Map<string, string>();
   if (appName) {
     for (const secret of secrets) {
-      const value = await lookup(applicationService(appName), secret.name);
+      const value = await lookup(
+        applicationService(appName, environment),
+        secret.name,
+      );
       if (value) {
         values.set(secret.name, value);
       }

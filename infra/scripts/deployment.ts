@@ -21,6 +21,7 @@ import { writeDockerArtifacts } from "./dockerArtifacts.js";
 import { renderReport, runInstanceCommand } from "./instanceCommands.js";
 import { inspectInstance } from "./instanceInspect.js";
 import { formatProblem } from "./problems.js";
+import { DEV_OPEN_VARIABLE } from "../../src/dev.js";
 import { commandEnvironment, targetOption } from "./commandOptions.js";
 import { resolveApplication, instanceMode } from "./instance.js";
 import { preflight } from "./preflight.js";
@@ -193,7 +194,7 @@ async function deploy(
     }
     return;
   }
-  const service = applicationService(app.name);
+  const service = applicationService(app.name, app.environment);
   const values = await requiredSecrets(app.secrets, service);
   if (app.postgresql) {
     const { runDbMigrations } = await import("./dbMigrations.ts");
@@ -315,9 +316,38 @@ async function applicationCommand(
         "--config",
         path.join(frameworkRoot, "src/vite.js"),
       ],
-      { ...process.env, REACT_ROUTER_ROOT: root },
+      await developmentEnvironment(app, args.includes("--open")),
     );
   }
+}
+
+/**
+ * What the dev server sees: this environment's stored secrets (the environment
+ * variables win), and `--open` only when asked for, never inherited.
+ */
+async function developmentEnvironment(
+  app: ResolvedApplication,
+  open: boolean,
+): Promise<NodeJS.ProcessEnv> {
+  const service = applicationService(app.name, app.environment);
+  const stored: Record<string, string> = {};
+  for (const name of [...app.secrets, ...app.optionalSecrets]) {
+    const value = await defaultSecretLookup(service, name);
+    if (value) {
+      stored[name] = value;
+    }
+  }
+  const env: NodeJS.ProcessEnv = {
+    ...stored,
+    ...process.env,
+    REACT_ROUTER_ROOT: root,
+  };
+  delete env[DEV_OPEN_VARIABLE];
+  if (open) {
+    env[DEV_OPEN_VARIABLE] = "1";
+    console.info("[chromatis] --open: login is disabled for this dev server");
+  }
+  return env;
 }
 
 export async function main(): Promise<void> {
