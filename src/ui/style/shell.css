@@ -494,7 +494,7 @@
   background: var(--color-bg);
   border-top: var(--border-1) solid var(--color-border-subtle);
 }
-/* As with tabs: when space runs out the bar scrolls instead of wrapping */
+/* When space runs out the bar scrolls instead of wrapping */
 .bottom-nav .bottom-nav__list {
   display: flex;
   overflow-x: auto;

@@ -33,7 +33,12 @@ export default [
     rules: { "chromatis/no-raw-sql": "off" },
   },
   {
-    files: ["eslint.config.js", "infra/**/*.js", "src/vite.js"],
+    files: [
+      "eslint.config.js",
+      "infra/**/*.js",
+      "src/vite.js",
+      "src/inline-route.js",
+    ],
     rules: {
       "@typescript-eslint/no-floating-promises": "off",
     },

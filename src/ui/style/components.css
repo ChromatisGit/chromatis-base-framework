@@ -1092,11 +1092,11 @@
 /* =====================================================================
    TABS (§22)
    ===================================================================== */
+/* When the tabs do not fit in one row they wrap onto the next: every tab stays
+   visible, and there is no scrollbar. */
 .tabs__list {
   display: flex;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scrollbar-width: thin;
+  flex-wrap: wrap;
   box-shadow: inset 0 -1px 0 var(--color-border-subtle);
 }
 .tabs__tab {

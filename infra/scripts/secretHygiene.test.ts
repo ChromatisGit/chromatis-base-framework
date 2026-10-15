@@ -60,6 +60,7 @@ describe("secret command", () => {
     const entries = secretEntries(
       {
         name: "demo",
+        environment: "production",
         declaredSecrets: [
           { name: "A", owner: "m", description: "d", requirement: "always" },
           {
@@ -73,13 +74,26 @@ describe("secret command", () => {
       {
         credentialNames: ["CF_TOKEN"],
         credentialService: "framework",
-        applicationService: (name) => `app.${name}`,
+        applicationService: (name, environment) => `app.${name}.${environment}`,
       },
     );
     expect(entries).toEqual([
       { name: "CF_TOKEN", kind: "credential", service: "framework" },
-      { name: "A", kind: "required", service: "app.demo" },
-      { name: "B", kind: "production", service: "app.demo" },
+      { name: "A", kind: "required", service: "app.demo.production" },
+      { name: "B", kind: "production", service: "app.demo.production" },
     ]);
+  });
+});
+
+describe("applicationService", () => {
+  test("keeps the production store and gives other environments their own", async () => {
+    const { applicationService } = await import("./secretStore.js");
+    expect(applicationService("holst")).toBe("dev.chromatis.holst");
+    expect(applicationService("holst", "production")).toBe(
+      "dev.chromatis.holst",
+    );
+    expect(applicationService("holst", "local")).toBe(
+      "dev.chromatis.holst.local",
+    );
   });
 });

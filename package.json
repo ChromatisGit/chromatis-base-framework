@@ -26,6 +26,7 @@
     "./auth": "./src/auth.ts",
     "./config": "./src/config.ts",
     "./database": "./src/database.ts",
+    "./dev": "./src/dev.ts",
     "./db-migrations": "./infra/scripts/dbMigrations.ts",
     "./errors": "./src/errors.ts",
     "./log": "./src/log.ts",
@@ -66,7 +67,7 @@
     "smol-toml": "^1.3.4",
     "vite": "^7.0.0",
     "vite-tsconfig-paths": "^5.0.0",
-    "wrangler": "4.92.0",
+    "wrangler": "4.151.0",
     "zod": "^4.1.0"
   },
   "devDependencies": {

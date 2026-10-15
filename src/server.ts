@@ -1,3 +1,4 @@
+import { DEV_OPEN_VARIABLE } from "./dev.js";
 import type { ServerBuild } from "react-router";
 import { createRequestHandler } from "react-router";
 import { createBunRuntimeHost } from "./stateful/bun.js";
@@ -77,7 +78,8 @@ function stringEnvironment(
 ): Record<string, string | undefined> {
   return Object.fromEntries(
     Object.entries(source).filter(
-      (entry): entry is [string, string] => typeof entry[1] === "string",
+      (entry): entry is [string, string] =>
+        typeof entry[1] === "string" && entry[0] !== DEV_OPEN_VARIABLE,
     ),
   );
 }
@@ -115,6 +117,8 @@ export async function startFrameworkBun<Service>(
   )) as ServerBuild;
   const handle = createRequestHandler(build, "production");
   const host = createBunRuntimeHost(hook?.definitions ?? []);
+  // A deployed server is never a `--open` development server.
+  delete process.env[DEV_OPEN_VARIABLE];
   const service = hook?.createService(host, stringEnvironment(process.env));
   if (hook?.sweep && service !== undefined) {
     setInterval(() => void hook.sweep?.(service), 60_000).unref();

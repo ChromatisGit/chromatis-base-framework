@@ -1,7 +1,19 @@
+import type { ConfigEnvironment } from "../../src/config.js";
+
 /** Where Chromatis keeps secret values: the operating system credential store. */
 export const credentialService = "dev.chromatis.framework";
-export const applicationService = (name: string): string =>
-  `dev.chromatis.${name}`;
+/**
+ * Production keeps the plain service so stored values stay valid; every other
+ * environment has a store of its own, so development never reads (or needs)
+ * the values a deploy pushes.
+ */
+export const applicationService = (
+  name: string,
+  environment: ConfigEnvironment = "production",
+): string =>
+  environment === "production"
+    ? `dev.chromatis.${name}`
+    : `dev.chromatis.${name}.${environment}`;
 export const credentialNames = [
   "CLOUDFLARE_API_TOKEN",
   "CLOUDFLARE_ACCOUNT_ID",

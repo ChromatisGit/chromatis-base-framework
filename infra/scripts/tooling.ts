@@ -81,7 +81,18 @@ export const generatedTypes = readFileSync(
 /** Where Chromatis generates React Router's app directory (git-ignored). */
 export const APP_DIRECTORY = ".chromatis/app";
 
-export const generatedRouterConfig = `export default { ssr: true, appDirectory: ${JSON.stringify(APP_DIRECTORY)} };\n`;
+export const generatedRouterConfig = `export default {
+  ssr: true,
+  appDirectory: ${JSON.stringify(APP_DIRECTORY)},
+  future: {
+    v8_middleware: true,
+    v8_splitRouteModules: true,
+    v8_viteEnvironmentApi: true,
+    v8_passThroughRequests: true,
+    v8_trailingSlashAwareDataRequests: true,
+  },
+};
+`;
 export const generatedCloudflareEntry = `import { ServerRouter, type EntryContext } from "react-router";
 import { renderToReadableStream } from "react-dom/server";
 
