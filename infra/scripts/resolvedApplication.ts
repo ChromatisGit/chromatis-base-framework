@@ -51,6 +51,8 @@ export type ResolvedRoute = Readonly<{
   file: string;
   /** The page's server file (`loader`, `action`). */
   server: ResolvedFile | undefined;
+  /** Rendered to HTML at build time. */
+  prerender: boolean;
   children: readonly ResolvedRoute[];
 }>;
 

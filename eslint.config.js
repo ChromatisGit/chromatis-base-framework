@@ -37,7 +37,7 @@ export default [
       "eslint.config.js",
       "infra/**/*.js",
       "src/vite.js",
-      "src/inline-route.js",
+      "src/prerender-run.js",
     ],
     rules: {
       "@typescript-eslint/no-floating-promises": "off",

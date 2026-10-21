@@ -125,14 +125,18 @@ describe("product routes", () => {
 
     const entry = read(".chromatis/app/main.tsx");
     expect(entry).toMatch(/^import \{ startApp \} from ".*src\/client\.tsx";/);
-    expect(entry).toMatch(/import \* as root from ".*app\/root";/);
-    expect(entry).toContain("rootServer: true,");
-    expect(entry).toContain(
+    expect(entry).toContain('import { app } from "./app";');
+
+    const app = read(".chromatis/app/app.ts");
+    expect(app).toMatch(/import \* as root from ".*app\/root";/);
+    expect(app).toContain('title: "Product & <Co>",');
+    expect(app).toContain("rootServer: true,");
+    expect(app).toContain(
       'id: "routes/home",\n      index: true,\n      server: true,',
     );
-    expect(entry).toContain('path: ":code",');
+    expect(app).toContain('path: ":code",');
     // API endpoints have no page.
-    expect(entry).not.toContain("routes/health");
+    expect(app).not.toContain("routes/health");
 
     const tables = read(".chromatis/build/routes.ts");
     expect(tables).toContain('{ path: "/api/health", module: module');

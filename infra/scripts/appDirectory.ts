@@ -11,6 +11,8 @@ import type {
 
 /** Where the browser entry lives; `index.html` loads it. */
 export const CLIENT_ENTRY = "main.tsx";
+/** The app's definition, next to the entry. */
+export const APP_MODULE = "app.ts";
 /** The generated server tables the worker and the Bun server import. */
 export const SERVER_ROUTES_FILE = ".chromatis/build/routes.ts";
 
@@ -99,23 +101,31 @@ function clientRoutes(
     });
 }
 
-/** The browser entry: the root, then the route tree with lazy pages. */
-export function clientEntry(app: ResolvedApplication): string {
-  const { root, rootServer, routes } = app.shell;
+/** The app's definition: the root, then the route tree with lazy pages. */
+export function appModule(app: ResolvedApplication): string {
+  const { root, rootServer, routes, document } = app.shell;
   return [
-    `import { startApp } from ${frameworkSource("client.tsx")};`,
+    `import type { AppDefinition } from ${frameworkSource("client.tsx")};`,
     ...(root ? [`import * as root from ${JSON.stringify(root.from)};`] : []),
     "",
-    "startApp({",
+    "export const app: AppDefinition = {",
     root ? "  root," : "  root: {},",
     ...(rootServer ? ["  rootServer: true,"] : []),
+    `  title: ${JSON.stringify(document?.title ?? "")},`,
     "  routes: [",
     ...clientRoutes(routes, "    "),
     "  ],",
-    "});",
+    "};",
     "",
   ].join("\n");
 }
+
+/** The browser entry; prerendering imports `app.ts` without starting it. */
+export const clientEntry = `import { startApp } from ${frameworkSource("client.tsx")};
+import { app } from "./${APP_MODULE.replace(/\.ts$/, "")}";
+
+void startApp(app);
+`;
 
 /**
  * The server's tables: API endpoints in declaration order, and every route
@@ -180,7 +190,8 @@ export function writeAppDirectory(
     path.join(directory, "index.html"),
     documentHtml(app.shell.document),
   );
-  writeFileSync(path.join(directory, CLIENT_ENTRY), clientEntry(app));
+  writeFileSync(path.join(directory, APP_MODULE), appModule(app));
+  writeFileSync(path.join(directory, CLIENT_ENTRY), clientEntry);
   mkdirSync(path.dirname(path.join(root, SERVER_ROUTES_FILE)), {
     recursive: true,
   });

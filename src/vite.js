@@ -312,6 +312,8 @@ export async function createViteConfig() {
         build: {
           outDir: path.join(root, "build/client"),
           emptyOutDir: true,
+          // Read by prerendering for a page's chunks, then removed.
+          manifest: true,
           rollupOptions: {
             input: path.join(root, APP_DIRECTORY, "index.html"),
           },

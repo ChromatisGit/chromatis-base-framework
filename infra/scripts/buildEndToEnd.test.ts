@@ -246,12 +246,10 @@ test("the dev server serves product, module and instance routes through the gene
     const origin = `http://localhost:${port}`;
     expect(await waitFor(`${origin}/api/ping`, 100, 200)).toBe(true);
     await expectServed(origin);
-    // The browser entry lists the routes with their lazy pages.
-    const entry = await (
-      await fetch(`${origin}/.chromatis/app/main.tsx`)
-    ).text();
-    expect(entry).toContain('"routes/landing"');
-    expect(entry).toContain("server: true");
+    // The app definition lists the routes with their lazy pages.
+    const app = await (await fetch(`${origin}/.chromatis/app/app.ts`)).text();
+    expect(app).toContain('"routes/landing"');
+    expect(app).toContain("server: true");
   } finally {
     server.kill();
   }

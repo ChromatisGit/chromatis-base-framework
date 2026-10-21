@@ -84,6 +84,7 @@ function resolveTree(
         path: declaration.path,
         ...resolved,
         server,
+        prerender: declaration.prerender === true,
         children: resolveTree(
           declaration.children ?? [],
           origin,
@@ -105,6 +106,9 @@ export type FlatRoute = Readonly<{
   file: string;
   /** How generated code imports the server file. */
   server: string | undefined;
+  /** The page file on disk. */
+  source: string;
+  prerender: boolean;
 }>;
 
 const joinUrl = (parent: string, segment: string | undefined): string => {
@@ -127,6 +131,8 @@ export function flattenRoutes(
         url: route.kind === "layout" ? undefined : url,
         file: route.from,
         server: route.server?.from,
+        source: route.file,
+        prerender: route.prerender,
       },
       ...flattenRoutes(route.children, url),
     ];
@@ -180,6 +186,21 @@ function collisions(flat: readonly FlatRoute[], source: string): Problem[] {
     }
   }
   return problems;
+}
+
+/** A prerendered page has one URL: no parameters. */
+function prerenderProblems(flat: readonly FlatRoute[]): Problem[] {
+  return flat.flatMap((route) =>
+    route.prerender && route.url?.includes(":")
+      ? [
+          {
+            source: `route ${route.id}`,
+            key: route.owner,
+            message: `${route.url} has parameters; only a fixed path can be prerendered`,
+          },
+        ]
+      : [],
+  );
 }
 
 export const EXTRA_ROUTES_FILE = "app/routes.ts";
@@ -301,7 +322,8 @@ export function resolveShell(input: {
     problems,
   );
   const routes = [...kept, ...extra];
-  problems.push(...collisions(flattenRoutes(routes), "routes"));
+  const flat = flattenRoutes(routes);
+  problems.push(...collisions(flat, "routes"), ...prerenderProblems(flat));
   const publicDirectory = app?.public
     ? path.resolve(packageOrigin.directory ?? root, app.public)
     : undefined;

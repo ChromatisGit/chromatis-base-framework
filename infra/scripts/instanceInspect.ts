@@ -134,7 +134,7 @@ export function redact(value: unknown, declared: ReadonlySet<string>): unknown {
 
 function shellReport(shell: ResolvedShell): ShellReport {
   const routes = flattenRoutes(shell.routes).map(
-    ({ server: _server, ...route }) => route,
+    ({ id, owner, kind, url, file }) => ({ id, owner, kind, url, file }),
   );
   return {
     root: { source: shell.rootSource, file: shell.root?.from },

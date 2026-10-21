@@ -11,6 +11,19 @@ export const ROUTES_PARAM = "_routes";
 /** Query parameter: the route id whose action to run. */
 export const ROUTE_PARAM = "_route";
 
+/** What a prerendered page leaves for the browser (`window.__chromatisPrerender`). */
+export type Prerendered = Readonly<{
+  path: string;
+  /** React Router's hydration data: the loaders' results at build time. */
+  hydrationData: Readonly<{ loaderData: Readonly<Record<string, unknown>> }>;
+}>;
+
+/**
+ * Set on `<html>` while a prerendered `index.html` serves a path it was not
+ * rendered for (the static fallback of every page); its CSS hides the markup.
+ */
+export const SHELL_ATTRIBUTE = "data-chromatis-shell";
+
 /** A loader's or action's outcome for one route. */
 export type DataResult =
   | Readonly<{ data: unknown; status?: number }>

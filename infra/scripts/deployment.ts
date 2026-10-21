@@ -19,6 +19,7 @@ import { DEV_OPEN_VARIABLE } from "../../src/dev.js";
 import { commandEnvironment, targetOption } from "./commandOptions.js";
 import { resolveApplication, instanceMode } from "./instance.js";
 import { preflight } from "./preflight.js";
+import { prerenderPages } from "./prerender.js";
 import type {
   BuildTarget,
   ResolvedApplication,
@@ -81,6 +82,7 @@ async function buildApp(
     ["x", "vite", "build", "--config", path.join(frameworkRoot, "src/vite.js")],
     { ...process.env, CHROMATIS_BUILD_TARGET: target },
   );
+  prerenderPages(root, app, frameworkRoot);
   if (target === "docker") {
     const image = path.join(root, ".chromatis/image");
     mkdirSync(image, { recursive: true });

@@ -13,7 +13,9 @@ import { z } from "zod";
  * A page's `file` runs in the browser: it default exports the component and may
  * export `ErrorBoundary`, `meta` and `handle`. Its `server` file runs only on the
  * server and exports `loader` and `action`; the browser fetches their results
- * (see `@chromatis/base/data`).
+ * (see `@chromatis/base/data`). `prerender: true` renders a page whose URL has
+ * no parameters to HTML at build time, with the data of a visitor without
+ * cookies, for search engines and link previews; the browser then takes over.
  *
  * `file` is a package-exported specifier (for example `@product/app/routes/home`)
  * or a `./` path relative to the declaring module's directory (for routes
@@ -29,6 +31,7 @@ export type RouteDeclaration = Readonly<{
   id?: string;
   file: string;
   server?: string;
+  prerender?: boolean;
   children?: readonly RouteDeclaration[];
 }>;
 
@@ -53,6 +56,7 @@ export const routeDeclarationSchema: z.ZodType<RouteDeclaration> = z.lazy(
           .string()
           .regex(/^\S+$/, { message: "must be a specifier" })
           .optional(),
+        prerender: z.literal(true).optional(),
         children: z.array(routeDeclarationSchema).optional(),
       })
       .strict()
@@ -87,6 +91,13 @@ export const routeDeclarationSchema: z.ZodType<RouteDeclaration> = z.lazy(
             code: "custom",
             path: ["children"],
             message: "an API endpoint has no children",
+          });
+        }
+        if (route.prerender && (route.api || route.layout)) {
+          context.addIssue({
+            code: "custom",
+            path: ["prerender"],
+            message: "only a page (path or index) can be prerendered",
           });
         }
         if (route.index && route.children) {
