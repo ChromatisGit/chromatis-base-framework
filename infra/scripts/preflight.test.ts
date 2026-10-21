@@ -254,7 +254,6 @@ describe("check gates without instance scripts", () => {
       modules: {},
       config: { "app.toml": APP_TOML },
     });
-    tool(root, "react-router", 0);
     tool(root, "tsc", 0);
     tool(root, "eslint", 3);
     tool(root, "prettier", 0);
@@ -266,7 +265,6 @@ describe("check gates without instance scripts", () => {
       .trim()
       .split("\n");
     expect(log).toEqual([
-      "react-router typegen",
       "tsc --noEmit",
       "eslint . --max-warnings 0",
       "prettier package.json --check",

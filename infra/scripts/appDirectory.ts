@@ -1,79 +1,173 @@
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { colorModeInitScript } from "../../src/ui/theme/colorMode.js";
+import type { AppDocument } from "../../src/module.js";
 import { APP_DIRECTORY } from "./tooling.js";
-import {
-  EXTRA_ROUTES_FILE,
-  INSTANCE_ROOT_FILE,
-  withoutExtension,
-} from "./routes.js";
+import { flattenRoutes } from "./routes.js";
 import type {
   ResolvedApplication,
   ResolvedRoute,
 } from "./resolvedApplication.js";
 
-/** The names a module exports, as `export { ... } from` needs them. */
-export function exportNames(file: string): string[] {
-  const scanned = new Bun.Transpiler({ loader: "tsx" }).scan(
-    readFileSync(file, "utf8"),
-  ).exports;
-  return [
-    ...scanned.filter((name) => name === "default"),
-    ...scanned.filter((name) => name !== "default").sort(),
+/** Where the browser entry lives; `index.html` loads it. */
+export const CLIENT_ENTRY = "main.tsx";
+/** The generated server tables the worker and the Bun server import. */
+export const SERVER_ROUTES_FILE = ".chromatis/build/routes.ts";
+
+const frameworkSource = (file: string) =>
+  JSON.stringify(path.resolve(import.meta.dir, "../../src", file));
+
+const escapeHtml = (value: string): string =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+
+const ICON_TYPES: Readonly<Record<string, string>> = {
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".ico": "image/x-icon",
+};
+
+/** The page every browser route starts from. */
+export function documentHtml(document: AppDocument | undefined): string {
+  const attributes = Object.entries({
+    lang: document?.lang ?? "en",
+    ...document?.attributes,
+  })
+    .map(([name, value]) => ` ${name}="${escapeHtml(value)}"`)
+    .join("");
+  const icon = document?.icon;
+  const iconType = icon ? ICON_TYPES[path.extname(icon)] : undefined;
+  const head = [
+    '<meta charset="utf-8" />',
+    `<meta name="viewport" content="${escapeHtml(document?.viewport ?? "width=device-width, initial-scale=1")}" />`,
+    `<title>${escapeHtml(document?.title ?? "")}</title>`,
+    ...(document?.description
+      ? [
+          `<meta name="description" content="${escapeHtml(document.description)}" />`,
+        ]
+      : []),
+    ...(icon
+      ? [
+          `<link rel="icon"${iconType ? ` type="${iconType}"` : ""} href="${escapeHtml(icon)}" />`,
+        ]
+      : []),
+    ...(document?.colorModeKey
+      ? [`<script>${colorModeInitScript(document.colorModeKey)}</script>`]
+      : []),
   ];
+  return [
+    "<!doctype html>",
+    `<html${attributes}>`,
+    "  <head>",
+    ...head.map((line) => `    ${line}`),
+    "  </head>",
+    "  <body>",
+    '    <div id="root"></div>',
+    `    <script type="module" src="/${APP_DIRECTORY}/${CLIENT_ENTRY}"></script>`,
+    "  </body>",
+    "</html>",
+    "",
+  ].join("\n");
 }
 
-const reexport = (file: string, from: string): string =>
-  `export { ${exportNames(file).join(", ")} } from ${JSON.stringify(from)};\n`;
-
-function routeEntries(
+function clientRoutes(
   routes: readonly ResolvedRoute[],
-  directory: string,
-  used: Set<string>,
-): unknown[] {
-  return routes.map((route) => {
-    let name = `${route.id.replace(/[^\w.-]+/g, "_")}`;
-    while (used.has(name)) {
-      name += "_";
-    }
-    used.add(name);
-    const file = `routes/${name}.tsx`;
-    writeFileSync(path.join(directory, file), reexport(route.file, route.from));
-    return {
-      id: route.id,
-      ...(route.kind === "index" ? { index: true } : {}),
-      ...(route.path === undefined ? {} : { path: route.path }),
-      file,
-      ...(route.children.length
-        ? { children: routeEntries(route.children, directory, used) }
-        : {}),
-    };
-  });
+  indent: string,
+): string[] {
+  return routes
+    .filter((route) => route.kind !== "api")
+    .flatMap((route) => {
+      const children = clientRoutes(route.children, `${indent}    `);
+      return [
+        `${indent}{`,
+        `${indent}  id: ${JSON.stringify(route.id)},`,
+        ...(route.kind === "index"
+          ? [`${indent}  index: true,`]
+          : route.path === undefined
+            ? []
+            : [`${indent}  path: ${JSON.stringify(route.path)},`]),
+        ...(route.server ? [`${indent}  server: true,`] : []),
+        `${indent}  page: () => import(${JSON.stringify(route.from)}),`,
+        ...(children.length
+          ? [`${indent}  children: [`, ...children, `${indent}  ],`]
+          : []),
+        `${indent}},`,
+      ];
+    });
 }
 
-const EXTRA_IMPORT = `import extra from "../../app/routes";
-
-type Entry = { id?: string; file: string; children?: Entry[] };
-// The instance's own routes: files are relative to its app/ directory.
-const rebase = (entries: readonly Entry[]): Entry[] =>
-  entries.map((entry) => ({
-    ...entry,
-    id: entry.id ?? entry.file.replace(/\\.[cm]?[jt]sx?$/, ""),
-    file: \`../../app/\${entry.file}\`,
-    ...(entry.children ? { children: rebase(entry.children) } : {}),
-  }));
-`;
+/** The browser entry: the root, then the route tree with lazy pages. */
+export function clientEntry(app: ResolvedApplication): string {
+  const { root, rootServer, routes } = app.shell;
+  return [
+    `import { startApp } from ${frameworkSource("client.tsx")};`,
+    ...(root ? [`import * as root from ${JSON.stringify(root.from)};`] : []),
+    "",
+    "startApp({",
+    root ? "  root," : "  root: {},",
+    ...(rootServer ? ["  rootServer: true,"] : []),
+    "  routes: [",
+    ...clientRoutes(routes, "    "),
+    "  ],",
+    "});",
+    "",
+  ].join("\n");
+}
 
 /**
- * Writes `.chromatis/app/`: `root.tsx`, `routes.ts` and one re-export file per
- * product route. The product's root is replaced by the instance's
- * `app/root.tsx`, and the instance's `app/routes.ts` is appended to the
- * product's routes.
+ * The server's tables: API endpoints in declaration order, and every route
+ * with its full path and server file for the data endpoint.
+ */
+export function serverRoutes(app: ResolvedApplication): string {
+  const flat = flattenRoutes(app.shell.routes);
+  const imports: string[] = [];
+  const name = (specifier: string): string => {
+    imports.push(specifier);
+    return `module${imports.length - 1}`;
+  };
+  const api = flat
+    .filter((route) => route.kind === "api")
+    .map(
+      (route) =>
+        `  { path: ${JSON.stringify(route.url)}, module: ${name(route.file)} },`,
+    );
+  const rootServer = app.shell.rootServer;
+  const data = [
+    ...(rootServer
+      ? [`  { id: "root", path: undefined, module: ${name(rootServer.from)} },`]
+      : []),
+    ...flat
+      .filter((route) => route.kind !== "api")
+      .map(
+        (route) =>
+          `  { id: ${JSON.stringify(route.id)}, path: ${route.kind === "layout" ? "undefined" : JSON.stringify(route.url)}, module: ${route.server ? name(route.server) : "undefined"} },`,
+      ),
+  ];
+  return [
+    `import { compileApi } from ${frameworkSource("api.ts")};`,
+    `import { compileData } from ${frameworkSource("data.ts")};`,
+    ...imports.map(
+      (specifier, index) =>
+        `import * as module${index} from ${JSON.stringify(specifier)};`,
+    ),
+    "",
+    "export const api = compileApi([",
+    ...api,
+    "]);",
+    "",
+    "export const data = compileData([",
+    ...data,
+    "]);",
+    "",
+  ].join("\n");
+}
+
+/**
+ * Writes `.chromatis/app/` (`index.html` and the browser entry) and the
+ * server's route tables.
  */
 export function writeAppDirectory(
   root: string,
@@ -81,29 +175,14 @@ export function writeAppDirectory(
 ): void {
   const directory = path.join(root, APP_DIRECTORY);
   rmSync(directory, { recursive: true, force: true });
-  mkdirSync(path.join(directory, "routes"), { recursive: true });
-
-  const own = path.join(root, INSTANCE_ROOT_FILE);
-  const shellRoot = existsSync(own)
-    ? { from: withoutExtension(own), file: own }
-    : app.shell.root;
-  if (shellRoot) {
-    writeFileSync(
-      path.join(directory, "root.tsx"),
-      reexport(shellRoot.file, shellRoot.from),
-    );
-  }
-  const extra = existsSync(path.join(root, EXTRA_ROUTES_FILE));
-  const product = routeEntries(app.shell.routes, directory, new Set());
+  mkdirSync(directory, { recursive: true });
   writeFileSync(
-    path.join(directory, "routes.ts"),
-    [
-      extra ? EXTRA_IMPORT : "",
-      `const product = ${JSON.stringify(product, null, 2)};`,
-      extra
-        ? "export default [...product, ...rebase(await extra)];"
-        : "export default product;",
-      "",
-    ].join("\n"),
+    path.join(directory, "index.html"),
+    documentHtml(app.shell.document),
   );
+  writeFileSync(path.join(directory, CLIENT_ENTRY), clientEntry(app));
+  mkdirSync(path.dirname(path.join(root, SERVER_ROUTES_FILE)), {
+    recursive: true,
+  });
+  writeFileSync(path.join(root, SERVER_ROUTES_FILE), serverRoutes(app));
 }

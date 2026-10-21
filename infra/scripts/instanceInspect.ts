@@ -1,14 +1,7 @@
 import type { ConfigEnvironment } from "../../src/config.js";
 import { inspectSecrets, type SecretDefinition } from "../../src/secrets.js";
 import { z } from "../../src/config.js";
-import { existsSync } from "node:fs";
-import path from "node:path";
-import {
-  flattenExtra,
-  flattenRoutes,
-  INSTANCE_ROOT_FILE,
-  loadExtraRoutes,
-} from "./routes.js";
+import { flattenRoutes } from "./routes.js";
 import type { ResolvedShell } from "./resolvedApplication.js";
 import { publicUrl } from "./appConfig.js";
 import { instanceMode, loadInstance, type InstanceMode } from "./instance.js";
@@ -64,14 +57,14 @@ export type DisabledModuleReport = Readonly<{
 export type RouteReport = Readonly<{
   id: string;
   owner: string;
-  kind: "route" | "index" | "layout";
+  kind: "route" | "index" | "layout" | "api";
   /** URL path; undefined for layouts. */
   url: string | undefined;
   file: string;
 }>;
 
 export type ShellReport = Readonly<{
-  /** Where the React Router root comes from. */
+  /** Where the root comes from. */
   root: Readonly<{
     source: "instance" | "product" | "none";
     file: string | undefined;
@@ -80,7 +73,7 @@ export type ShellReport = Readonly<{
   routes: readonly RouteReport[];
   /** Product paths the instance replaced. */
   omitted: readonly string[];
-  /** Routes of the instance's own app/routes.ts, appended after the product's. */
+  /** Routes of the instance's own app/routes.ts, after the product's. */
   extraRoutes: readonly RouteReport[];
 }>;
 
@@ -139,21 +132,15 @@ export function redact(value: unknown, declared: ReadonlySet<string>): unknown {
   return value;
 }
 
-async function shellReport(
-  root: string,
-  shell: ResolvedShell,
-): Promise<ShellReport> {
-  const own = path.join(root, INSTANCE_ROOT_FILE);
-  const extra = await loadExtraRoutes(root);
+function shellReport(shell: ResolvedShell): ShellReport {
+  const routes = flattenRoutes(shell.routes).map(
+    ({ server: _server, ...route }) => route,
+  );
   return {
-    root: existsSync(own)
-      ? { source: "instance", file: own }
-      : shell.root
-        ? { source: "product", file: shell.root.from }
-        : { source: "none", file: undefined },
-    routes: flattenRoutes(shell.routes),
+    root: { source: shell.rootSource, file: shell.root?.from },
+    routes: routes.filter((route) => route.owner !== "instance"),
     omitted: shell.omitted,
-    extraRoutes: flattenExtra(extra.routes ?? []),
+    extraRoutes: routes.filter((route) => route.owner === "instance"),
   };
 }
 
@@ -266,7 +253,7 @@ export async function inspectInstance(
       contributions: module.declaration.contributions.map((c) => c.id),
       artifacts: module.declaration.artifacts.map((a) => a.id),
     })),
-    shell: await shellReport(root, instance.shell),
+    shell: shellReport(instance.shell),
     contributions: contributionDeclarations(modules),
     artifacts: artifactRequirements(modules, root),
     secrets,

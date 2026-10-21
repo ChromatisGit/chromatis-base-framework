@@ -49,11 +49,11 @@ Required secrets are those the active modules declare (`always`, plus `productio
 
 Chromatis writes `.chromatis/build/wrangler.json` (name, entry, compatibility settings, `PUBLIC_URL`, Durable Object bindings and migrations) and builds with the Cloudflare Vite plugin, which emits the deployable `build/server/wrangler.json`. For each Stateful Runtime kind the Worker exports a Durable Object class; the committed ledger `.chromatis/runtime-migrations.json` records class additions and deletions as appended tags (`v1`, `v2`, …) and is never edited by hand. A renamed kind deletes the old class and adds a new one; in-memory instances are not carried over. Review and commit a new ledger entry before deploying. The smoke test requests the public URL; if that fails it resolves the Worker's `workers.dev` URL and warns that the custom domain still has to be attached in Cloudflare.
 
-React Router's Web Streams server entry is written to `.chromatis/app/entry.server.tsx` for the build and removed afterwards.
+The Worker renders no pages. The generated assets configuration serves `index.html` for every path without a file (`not_found_handling: single-page-application`) and hands only `/_chromatis/*` and the API endpoints' paths to the Worker first (`run_worker_first`). A product's `_headers` file (in its `app.public` directory or the instance's `public/`) sets the static files' headers.
 
 ## Bun / Docker mechanics
 
-The server entry and the server build are bundled with `Bun.build` into `.chromatis/image`, together with `build/client`; the image is built from the framework Dockerfile (`oven/bun`, runs as the `bun` user, exposes the configured port) by the generated `.chromatis/build/compose.json`. Embedded artifacts and configuration need no mounts. The compose service has a health check on `/_chromatis/health`, receives `PORT`, `PUBLIC_URL` and the secrets from `.chromatis/build/app.env` (mode 0600, git-ignored), and is started with `docker compose up --build -d`. The image contains no secret values.
+The server entry and the server's route tables are bundled with `Bun.build` into `.chromatis/image`, together with `build/client`, whose `index.html` the server returns for every page path; the image is built from the framework Dockerfile (`oven/bun`, runs as the `bun` user, exposes the configured port) by the generated `.chromatis/build/compose.json`. Embedded artifacts and configuration need no mounts. The compose service has a health check on `/_chromatis/health`, receives `PORT`, `PUBLIC_URL` and the secrets from `.chromatis/build/app.env` (mode 0600, git-ignored), and is started with `docker compose up --build -d`. The image contains no secret values.
 
 ## Database
 

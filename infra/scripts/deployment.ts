@@ -1,11 +1,5 @@
 import { spawnSync } from "node:child_process";
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { cpSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { generateArtifacts, frameworkRoot } from "./application.js";
 import { embedArtifacts, prepareArtifacts } from "./artifacts.js";
@@ -36,17 +30,10 @@ import {
   defaultSecretLookup,
   requiredSecrets,
 } from "./secretStore.js";
-import {
-  APP_DIRECTORY,
-  checkTooling,
-  forbiddenFiles,
-  generatedCloudflareEntry,
-  repairTooling,
-} from "./tooling.js";
+import { checkTooling, forbiddenFiles, repairTooling } from "./tooling.js";
 import { printPlan } from "./deployPlan.js";
 import { smokeTest } from "./smoke.js";
 import { secretCommand } from "./secretCommand.js";
-import { materializeExternalRoutes } from "./routeMaterialize.js";
 
 const root = process.cwd();
 const wranglerPath = findWrangler(root);
@@ -89,38 +76,11 @@ async function buildApp(
   }
   generateArtifacts(root, app);
   embedArtifacts(root, app);
-  const entry = path.join(root, APP_DIRECTORY, "entry.server.tsx");
-  if (target === "cloudflare") {
-    if (existsSync(entry)) {
-      throw new Error(
-        `${APP_DIRECTORY}/entry.server.tsx must be framework-generated; remove it and run chromatis build`,
-      );
-    }
-    writeFileSync(entry, generatedCloudflareEntry);
-  }
-  const restoreRoutes = materializeExternalRoutes(root);
-  try {
-    run(
-      "bun",
-      [
-        "x",
-        "react-router",
-        "build",
-        "--config",
-        path.join(frameworkRoot, "src/vite.js"),
-      ],
-      {
-        ...process.env,
-        REACT_ROUTER_ROOT: root,
-        CHROMATIS_BUILD_TARGET: target,
-      },
-    );
-  } finally {
-    restoreRoutes();
-    if (target === "cloudflare") {
-      unlinkSync(entry);
-    }
-  }
+  run(
+    "bun",
+    ["x", "vite", "build", "--config", path.join(frameworkRoot, "src/vite.js")],
+    { ...process.env, CHROMATIS_BUILD_TARGET: target },
+  );
   if (target === "docker") {
     const image = path.join(root, ".chromatis/image");
     mkdirSync(image, { recursive: true });
@@ -129,15 +89,10 @@ async function buildApp(
       path.join(root, ".chromatis/build/bun.ts"),
       path.join(image, "server.js"),
     );
-    cpSync(path.join(root, "build"), path.join(image, "build"), {
+    cpSync(path.join(root, "build/client"), path.join(image, "build/client"), {
       recursive: true,
       force: true,
     });
-    await bundleForBun(
-      root,
-      path.join(root, "build/server/index.js"),
-      path.join(image, "build/server/index.js"),
-    );
   }
   return generateArtifacts(root, app);
 }
@@ -309,13 +264,7 @@ async function applicationCommand(
     embedArtifacts(root, app);
     run(
       "bun",
-      [
-        "x",
-        "react-router",
-        "dev",
-        "--config",
-        path.join(frameworkRoot, "src/vite.js"),
-      ],
+      ["x", "vite", "--config", path.join(frameworkRoot, "src/vite.js")],
       await developmentEnvironment(app, args.includes("--open")),
     );
   }
@@ -340,7 +289,6 @@ async function developmentEnvironment(
   const env: NodeJS.ProcessEnv = {
     ...stored,
     ...process.env,
-    REACT_ROUTER_ROOT: root,
   };
   delete env[DEV_OPEN_VARIABLE];
   if (open) {

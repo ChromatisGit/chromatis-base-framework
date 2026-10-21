@@ -1,11 +1,12 @@
-/* global process */
+/* global process, Headers, Request, URL */
 import { defineConfig, searchForWorkspaceRoot } from "vite";
-import { reactRouter } from "@react-router/dev/vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import path from "node:path";
-import { existsSync, readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { inlinePackageReexport } from "./inline-route.js";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { Readable } from "node:stream";
+
+const APP_DIRECTORY = ".chromatis/app";
+const SERVER_ROUTES = ".chromatis/build/routes.ts";
 
 /**
  * Facts derived by `chromatis` before Vite starts (see writeBuildContext in
@@ -14,7 +15,12 @@ import { inlinePackageReexport } from "./inline-route.js";
 function buildContext(root) {
   const file = path.join(root, ".chromatis/build/application.json");
   if (!existsSync(file)) {
-    return { serverHook: null, bundledPackages: [], allowedRoots: [] };
+    return {
+      serverHook: null,
+      bundledPackages: [],
+      allowedRoots: [],
+      productPublic: null,
+    };
   }
   return JSON.parse(readFileSync(file, "utf8"));
 }
@@ -37,49 +43,205 @@ function developmentRuntime(context) {
   };
 }
 
+/** A Node request of the dev server as a Fetch `Request`. */
+function fetchRequest(request) {
+  const origin = `http://${request.headers.host ?? "localhost"}`;
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(request.headers)) {
+    if (value === undefined || name.startsWith(":")) {
+      continue;
+    }
+    for (const item of Array.isArray(value) ? value : [value]) {
+      headers.append(name, item);
+    }
+  }
+  const body = request.method === "GET" || request.method === "HEAD";
+  return new Request(new URL(request.originalUrl ?? request.url, origin), {
+    method: request.method,
+    headers,
+    ...(body ? {} : { body: Readable.toWeb(request), duplex: "half" }),
+  });
+}
+
+/** Writes a Fetch `Response` to a Node response of the dev server. */
+async function sendResponse(response, target) {
+  target.statusCode = response.status;
+  for (const [name, value] of response.headers) {
+    if (name === "set-cookie") {
+      continue;
+    }
+    target.setHeader(name, value);
+  }
+  const cookies = response.headers.getSetCookie();
+  if (cookies.length) {
+    target.setHeader("set-cookie", cookies);
+  }
+  if (!response.body) {
+    target.end();
+    return;
+  }
+  for await (const chunk of response.body) {
+    target.write(chunk);
+  }
+  target.end();
+}
+
 /**
- * Serve the generated one-line route wrappers with the package route inlined, as
- * `materializeExternalRoutes` does on disk for builds. Without it React Router
- * strips `loader` from the wrapper only, and the client imports the package
- * module with its `.server` imports.
+ * The server side in the dev server: data and API requests are answered from
+ * the generated route tables, inside a request scope as in production, before
+ * Vite serves files; every other page request gets the app's `index.html`.
  */
-function inlinePackageRoutes(root) {
-  const appDirectory = path.join(root, ".chromatis/app") + path.sep;
-  const instanceRequire = createRequire(path.join(root, "package.json"));
-  // Vite resolves extensionless specifiers, `require.resolve` does not.
-  const require = {
-    resolve(specifier) {
-      try {
-        return instanceRequire.resolve(specifier);
-      } catch (error) {
-        for (const extension of [".tsx", ".ts", ".jsx", ".js"]) {
-          try {
-            return instanceRequire.resolve(specifier + extension);
-          } catch {
-            // Try the next extension.
+function developmentServer(root) {
+  const tables = path.join(root, SERVER_ROUTES);
+  const html = path.join(root, APP_DIRECTORY, "index.html");
+  return {
+    name: "chromatis:development-server",
+    configureServer(server) {
+      server.middlewares.use(async (request, response, next) => {
+        try {
+          if (!existsSync(tables)) {
+            next();
+            return;
           }
+          const routes = await server.ssrLoadModule(tables);
+          const { serveRoutes } = await server.ssrLoadModule(
+            path.join(import.meta.dirname, "server.ts"),
+          );
+          const answer = await serveRoutes(routes, fetchRequest(request));
+          if (!answer) {
+            next();
+            return;
+          }
+          await sendResponse(answer, response);
+        } catch (error) {
+          next(error);
         }
-        throw error;
-      }
+      });
+      return () => {
+        server.middlewares.use(async (request, response, next) => {
+          const accept = request.headers.accept ?? "";
+          if (
+            (request.method !== "GET" && request.method !== "HEAD") ||
+            !accept.includes("text/html")
+          ) {
+            next();
+            return;
+          }
+          try {
+            const page = await server.transformIndexHtml(
+              request.originalUrl ?? request.url ?? "/",
+              readFileSync(html, "utf8"),
+            );
+            response.statusCode = 200;
+            response.setHeader("Content-Type", "text/html; charset=utf-8");
+            response.end(page);
+          } catch (error) {
+            next(error);
+          }
+        });
+      };
     },
   };
+}
+
+const STATIC_TYPES = {
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".ico": "image/x-icon",
+  ".txt": "text/plain; charset=utf-8",
+  ".xml": "application/xml",
+  ".json": "application/json",
+};
+
+/** Every file below `directory`, as paths relative to it with `/`. */
+function filesBelow(directory, prefix = "") {
+  return readdirSync(path.join(directory, prefix), {
+    withFileTypes: true,
+  }).flatMap((entry) => {
+    const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+    return entry.isDirectory() ? filesBelow(directory, relative) : [relative];
+  });
+}
+
+/**
+ * The product's static files (manifest `app.public`) beside the instance's own
+ * `public/`, which Vite serves and copies itself and which wins per file: in
+ * the dev server they are served as they are, in the client build they land at
+ * its root.
+ */
+function productPublic(directory, root) {
+  if (typeof directory !== "string" || !existsSync(directory)) {
+    return [];
+  }
+  const own = path.join(root, "public");
+  const shadowed = (file) => existsSync(path.join(own, file));
+  return [
+    {
+      name: "chromatis:product-public",
+      configureServer(server) {
+        server.middlewares.use((request, response, next) => {
+          let file;
+          try {
+            file = decodeURIComponent(
+              new URL(request.url ?? "/", "http://local").pathname,
+            ).slice(1);
+          } catch {
+            next();
+            return;
+          }
+          const target = path.join(directory, file);
+          if (
+            !file ||
+            !target.startsWith(`${directory}${path.sep}`) ||
+            shadowed(file) ||
+            !statSync(target, { throwIfNoEntry: false })?.isFile()
+          ) {
+            next();
+            return;
+          }
+          response.statusCode = 200;
+          response.setHeader(
+            "Content-Type",
+            STATIC_TYPES[path.extname(target)] ?? "application/octet-stream",
+          );
+          response.end(readFileSync(target));
+        });
+      },
+    },
+    {
+      name: "chromatis:product-public-build",
+      apply: "build",
+      applyToEnvironment: (environment) => environment.name === "client",
+      generateBundle() {
+        for (const file of filesBelow(directory)) {
+          if (!shadowed(file)) {
+            this.emitFile({
+              type: "asset",
+              fileName: file,
+              source: readFileSync(path.join(directory, file)),
+            });
+          }
+        }
+      },
+    },
+  ];
+}
+
+/** The generated `index.html` lands at the root of the client build. */
+function documentAtRoot() {
+  const generated = `${APP_DIRECTORY}/index.html`;
   return {
-    name: "chromatis:inline-package-routes",
-    enforce: "pre",
-    load(id) {
-      const file = id.split("?")[0];
-      if (!file.startsWith(appDirectory) || !/\.[cm]?[jt]sx?$/.test(file)) {
-        return;
+    name: "chromatis:document-at-root",
+    apply: "build",
+    enforce: "post",
+    generateBundle(_options, bundle) {
+      const asset = bundle[generated];
+      if (asset) {
+        delete bundle[generated];
+        asset.fileName = "index.html";
+        bundle["index.html"] = asset;
       }
-      const inlined = inlinePackageReexport(
-        readFileSync(file, "utf8"),
-        require,
-      );
-      if (!inlined) {
-        return;
-      }
-      this.addWatchFile(inlined.source);
-      return { code: inlined.code, map: null };
     },
   };
 }
@@ -97,11 +259,12 @@ export async function createViteConfig() {
   const root = process.cwd();
   const context = buildContext(root);
   const plugins = [
-    reactRouter(),
     tsconfigPaths({ projects: [path.join(root, "tsconfig.json")] }),
+    documentAtRoot(),
+    ...productPublic(context.productPublic, root),
   ];
   if (!process.env.CHROMATIS_BUILD_TARGET) {
-    plugins.push(inlinePackageRoutes(root), developmentRuntime(context));
+    plugins.push(developmentServer(root), developmentRuntime(context));
   }
   if (process.env.CHROMATIS_BUILD_TARGET === "cloudflare") {
     const { cloudflare } = await import("@cloudflare/vite-plugin");
@@ -114,7 +277,10 @@ export async function createViteConfig() {
   }
   return defineConfig({
     root,
+    appType: "custom",
+    esbuild: { jsx: "automatic" },
     server: {
+      ...(process.env.PORT ? { port: Number(process.env.PORT) } : {}),
       fs: {
         allow: [
           searchForWorkspaceRoot(root),
@@ -142,7 +308,15 @@ export async function createViteConfig() {
       },
     },
     environments: {
-      client: { build: { outDir: path.join(root, "build/client") } },
+      client: {
+        build: {
+          outDir: path.join(root, "build/client"),
+          emptyOutDir: true,
+          rollupOptions: {
+            input: path.join(root, APP_DIRECTORY, "index.html"),
+          },
+        },
+      },
       ssr: { build: { outDir: path.join(root, "build/server") } },
     },
     resolve: {
@@ -160,6 +334,7 @@ export async function createViteConfig() {
     },
     ssr: { noExternal: [...context.bundledPackages, "@chromatis/base"] },
     optimizeDeps: {
+      entries: [path.join(root, APP_DIRECTORY, "index.html")],
       exclude: context.bundledPackages,
       esbuildOptions: { jsx: "automatic" },
     },

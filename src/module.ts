@@ -413,11 +413,41 @@ const manifestModuleSchema = z
   })
   .strict();
 
+/**
+ * The HTML document the browser app starts in. Chromatis writes `index.html`
+ * from it; the app renders into its body.
+ */
+const documentSchema = z
+  .object({
+    lang: z.string().min(1),
+    title: z.string().min(1),
+    description: z.string().optional(),
+    /** Attributes of `<html>`, such as `data-brand`. */
+    attributes: z.record(z.string(), z.string()).default({}),
+    /** URL of the favicon, for example `/favicon.svg`. */
+    icon: z.string().optional(),
+    viewport: z.string().default("width=device-width, initial-scale=1"),
+    /** Applies the stored color mode before the first paint (see useColorMode). */
+    colorModeKey: z.string().optional(),
+  })
+  .strict();
+
+export type AppDocument = z.output<typeof documentSchema>;
+
 /** Application-level parts of the product package, outside any module. */
 const manifestAppSchema = z
   .object({
-    /** The React Router root route file (specifier, see RouteDeclaration). */
+    /** The root route's component file (specifier, see RouteDeclaration). */
     root: z.string().regex(/^\S+$/).optional(),
+    /** The root route's server file: `loader` and `action`. */
+    server: z.string().regex(/^\S+$/).optional(),
+    document: documentSchema.optional(),
+    /**
+     * The product's static files (favicon, `_headers`, `robots.txt`, ...): a
+     * directory relative to the manifest, such as `../public`. They land at the
+     * root of the client build; the instance's own `public/` wins per file.
+     */
+    public: z.string().regex(/^\S+$/).optional(),
     routes: z.array(routeDeclarationSchema).default([]),
   })
   .strict();
@@ -503,7 +533,13 @@ export function createManifest(
     entry: string;
     declaration: ModuleDeclaration;
   }>[],
-  app?: Readonly<{ root?: string; routes?: readonly RouteDeclaration[] }>,
+  app?: Readonly<{
+    root?: string;
+    server?: string;
+    document?: z.input<typeof documentSchema>;
+    public?: string;
+    routes?: readonly RouteDeclaration[];
+  }>,
 ): ChromatisManifest {
   const manifest = {
     formatVersion: MANIFEST_FORMAT_VERSION,

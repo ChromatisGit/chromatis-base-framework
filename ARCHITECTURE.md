@@ -14,7 +14,7 @@ Chromatis is deliberately not a general application framework. Its abstractions 
 | ------------------------- | ------------------------------------------------------------------------------------- |
 | Runtime / package manager | Bun                                                                                   |
 | Language                  | TypeScript, strict mode                                                               |
-| UI                        | React 19, React Router 7                                                              |
+| UI                        | React 19, rendered in the browser; React Router 7 as its router (data mode)           |
 | Build                     | Vite 7                                                                                |
 | Validation                | Zod                                                                                   |
 | Configuration             | TOML                                                                                  |
@@ -44,7 +44,7 @@ A module declaration (`@chromatis/base/module`) contains:
 | `contributions` | Build steps: an importable function that writes `<outDir>/<id>/`.                       |
 | `artifacts`     | Directories under `.chromatis/artifacts/` the build embeds, with an optional validator. |
 | `authoredFiles` | Importable functions that tell editors which schema each hand-written file follows.     |
-| `routes`        | React Router routes as data (section 8).                                                |
+| `routes`        | Pages and API endpoints as data (section 8).                                            |
 
 `defineModule` validates strictly and freezes the result. Schemas must be `.strict()` at every object level so a misspelled key is an error, and must produce plain JSON data because runtime code receives it as generated JSON.
 
@@ -91,8 +91,8 @@ validate configuration
  → run build contributions (id order, each into a fresh .chromatis/artifacts/<id>/)
  → validate every declared artifact (exists; validator ok; errors aggregated)
  → embed exactly those directories (chromatis-artifacts, with recorded digests)
- → generate provider files and the React Router app directory
- → build the application (client + server)
+ → generate provider files, index.html, the browser entry and the server's route tables
+ → build the application (browser app + server)
  → static preflight
  → (deploy only) preflight, migrations, secret upload, deployment, smoke test
 ```
@@ -103,11 +103,16 @@ A contribution is a function `(ctx: { instanceRoot, outDir, environment, config 
 
 ## 8. Routes and root
 
-A product declares its root file and routes as data, mirroring React Router's config: a route (`path`), an index route, or a pathless layout, each with a file, an optional id and children. The default id is `routes/<file name>`, as in React Router; two routes with the same file need explicit ids. Chromatis resolves every file with the instance's module resolution and checks that ids and URL paths are unique across the package and its active modules.
+Pages render in the browser; nothing is rendered on the server. A Worker on Workers Free has 10 ms of CPU per request, and server rendering every page used most of it, so the server only answers data and API requests and the static assets carry the rest.
 
-React Router needs route files in an app directory, so Chromatis generates `.chromatis/app/` and points `appDirectory` there: a `root.tsx`, a `routes.ts` with the route tree, and one re-export file per route whose export names are read from the route file. During a build the re-exports are temporarily inlined so React Router can split server and client exports; in dev they stay re-exports and Vite serves the product sources directly.
+A product declares its root, its document and its routes as data, mirroring React Router's route config: a route (`path`), an index route, a pathless layout, or an API endpoint (`api: true`), each with a file, an optional id and children. The default id is `routes/<file name>`; two routes with the same file need explicit ids. Chromatis resolves every file with the instance's module resolution and checks that ids and URL paths are unique across the package, its active modules and the instance.
 
-An instance extends this without repeating it. Its `app/routes.ts` (a `RouteConfig`) is appended after the product's routes, its `app/root.tsx` replaces the product root, and `[routes] omit` lists product URL paths it replaces. A route of the instance that reuses a product path or id is a `check` error.
+- A page's `file` runs in the browser. It default exports the component and may export `ErrorBoundary` (which receives `{ error }`), `meta` (for the document title) and `handle`. Its `server` file runs only on the server and exports `loader` and `action`. The root has the same pair: manifest `app.root` and `app.server`.
+- The browser router (`src/client.tsx`) loads pages lazily. One GET to `/_chromatis/data<path>?_routes=a,b` runs every server loader a navigation needs, inside one request scope, so a page costs the Worker one request. An action is a request with the form's method to `?_route=id`. The answer is JSON per route (`src/data-protocol.ts`): data, an error (only a thrown value is one; a returned `data({...}, { status: 401 })` stays data), or a redirect that carries its `Set-Cookie` and makes every loader run again when it set a cookie.
+- An API endpoint's file exports one handler per HTTP method (`src/api.ts`). Endpoints answer before anything else and pay for nothing but their own work.
+- `app.document` (language, title, description, `<html>` attributes, icon, viewport, color-mode key) becomes the `index.html` every page starts from. `app.public` names the product's static directory (favicon, `_headers`, `robots.txt`); its files land at the root of the client build, and the instance's own `public/` wins per file.
+
+An instance extends this without repeating it. Its `app/routes.ts` default exports a list of route declarations with `./` files relative to `app/`; they are appended after the product's routes. Its `app/root.tsx` (with an optional `app/root.server.ts`) replaces the product root, and `[routes] omit` lists product URL paths it replaces. A route of the instance that reuses a product path or id is a `check` error.
 
 ## 9. Commands
 
@@ -128,7 +133,8 @@ Everything an instance would otherwise repeat is generated, and git-ignored, und
 
 ```text
 tsconfig.json, eslint.config.js, types.d.ts     extended by the one-line root stubs; ambient types of the virtual modules
-app/                                            React Router root, routes and re-exports
+app/index.html, app/main.tsx                    the document and the browser entry (root and route tree with lazy pages)
+build/routes.ts                                 the server's tables: API endpoints and every route's server file
 artifacts/<path>/                               contribution output, validated
 build/artifacts.ts, artifacts.json              chromatis-artifacts and its digests
 build/config.ts                                 chromatis-config
@@ -139,15 +145,17 @@ image/                                          bundled server and client for th
 runtime-migrations.json                         Durable Object migration ledger (committed)
 ```
 
-`react-router.config.ts` is generated at the instance root, also git-ignored. The two root stubs (`tsconfig.json`, `eslint.config.js`) stay in the instance because TypeScript, editors, `vite-tsconfig-paths` and ESLint look for them there.
+Nothing is generated at the instance root; `init` removes what React Router's framework mode left there (`react-router.config.ts`, `.react-router/`). The two root stubs (`tsconfig.json`, `eslint.config.js`) stay in the instance because TypeScript, editors, `vite-tsconfig-paths` and ESLint look for them there.
 
 ## 11. Deployment
 
 Supported targets are Cloudflare (Workers with static assets and Durable Objects) and a Bun server, locally or in Docker. Both run the same domain code; only the runtime host differs.
 
-**Cloudflare.** The Worker entry creates the framework worker around the React Router server build, the server hook and one Durable Object class per Stateful Runtime kind. Durable Object migrations are tracked in `.chromatis/runtime-migrations.json`, which only ever appends tags and is committed. The Wrangler configuration sets `PUBLIC_URL`; secrets are uploaded with `wrangler secret put` and the Worker is deployed with the generated configuration. A smoke test requests the public URL and, if the custom domain is not reachable yet, the `workers.dev` URL, and probes the hook's realtime route.
+Both build with plain Vite: the browser app into `build/client` (with `index.html` at its root), and on Cloudflare the Worker into `build/server`.
 
-**Bun / Docker.** The server entry and the server build are bundled into `.chromatis/image` and built with the framework Dockerfile; artifacts and configuration are embedded in the bundle, so the image needs no mounted content. Compose passes `PORT`, `PUBLIC_URL` and the declared secrets from the generated env file.
+**Cloudflare.** Static assets answer every page: `index.html` for any path without a file (`not_found_handling: single-page-application`). The Worker runs first only for `/_chromatis/*` and the API endpoints' paths (`run_worker_first`); anything else that reaches it is a 404. The Worker entry creates the framework worker around the server's route tables, the server hook and one Durable Object class per Stateful Runtime kind. Durable Object migrations are tracked in `.chromatis/runtime-migrations.json`, which only ever appends tags and is committed. The Wrangler configuration sets `PUBLIC_URL`; secrets are uploaded with `wrangler secret put` and the Worker is deployed with the generated configuration. A smoke test requests the public URL and, if the custom domain is not reachable yet, the `workers.dev` URL, and probes the hook's realtime route.
+
+**Bun / Docker.** The server entry and the route tables are bundled into `.chromatis/image` next to `build/client` and built with the framework Dockerfile; artifacts and configuration are embedded in the bundle, so the image needs no mounted content. The server answers data and API requests, serves the client files, and returns `index.html` for every other GET. Compose passes `PORT`, `PUBLIC_URL` and the declared secrets from the generated env file.
 
 **Preflight** runs before a deploy and in `doctor`, and returns one aggregated list: tooling files, valid artifacts that match what the build embedded, a loadable server hook whose definitions match the declared kinds, the migration ledger, static database and security checks and a database connection when a module uses PostgreSQL, all required secrets for the environment, a real public domain, and target availability (Wrangler, Cloudflare credentials and a Wrangler dry run, or Docker). Production migrations are explicit: deploy applies them with the owner credential, and the long-running process only checks that the schema is current.
 
