@@ -2,12 +2,14 @@
  * The browser side of a Chromatis app: the generated entry calls `startApp`
  * with the route tree. Pages render in the browser; the loaders and actions of
  * their server files run on the server, and one request per navigation
- * fetches every server loader it needs (see data-protocol.ts).
+ * fetches every server loader it needs (see data-protocol.ts). A page that was
+ * prerendered at build time (prerender.tsx) is hydrated instead.
  */
 import { StrictMode, useLayoutEffect, type ComponentType } from "react";
-import { createRoot } from "react-dom/client";
+import { createRoot, hydrateRoot } from "react-dom/client";
 import {
   createBrowserRouter,
+  matchRoutes,
   redirect,
   RouterProvider,
   ScrollRestoration,
@@ -22,8 +24,10 @@ import {
   DATA_PREFIX,
   ROUTE_PARAM,
   ROUTES_PARAM,
+  SHELL_ATTRIBUTE,
   type DataResponse,
   type DataResult,
+  type Prerendered,
 } from "./data-protocol.js";
 
 /** What a page file exports. */
@@ -67,6 +71,8 @@ export type ClientRoute = Readonly<{
 export type AppDefinition = Readonly<{
   root: PageModule;
   rootServer?: boolean;
+  /** The document's title, for pages whose `meta` names none. */
+  title: string;
   routes: readonly ClientRoute[];
 }>;
 
@@ -120,12 +126,18 @@ export function unpack(result: DataResult | undefined): unknown {
   return result.data;
 }
 
+/** How data requests reach the server: `fetch`, or the server in-process. */
+export type FetchData = (url: string, init: RequestInit) => Promise<Response>;
+
+const browserFetch: FetchData = (url, init) => fetch(url, init);
+
 async function loadServer(
+  fetchData: FetchData,
   request: Request,
   ids: readonly string[],
 ): Promise<DataResponse> {
   return readData(
-    await fetch(dataUrl(request.url, ROUTES_PARAM, ids.join(",")), {
+    await fetchData(dataUrl(request.url, ROUTES_PARAM, ids.join(",")), {
       signal: request.signal,
       headers: { Accept: "application/json" },
     }),
@@ -156,6 +168,7 @@ const serverLoader = () => null;
 
 export function createDataStrategy(
   servers: ReadonlySet<string>,
+  fetchData: FetchData = browserFetch,
 ): DataStrategyFunction {
   return async ({ request, matches }) => {
     const pending = matches.filter((match) => match.shouldCallHandler());
@@ -165,7 +178,7 @@ export function createDataStrategy(
             .filter((match) => servers.has(match.route.id))
             .map((match) => match.route.id)
         : [];
-    const batch = ids.length ? loadServer(request, ids) : undefined;
+    const batch = ids.length ? loadServer(fetchData, request, ids) : undefined;
     // Kept from rejecting unobserved; every server match awaits it below.
     batch?.catch(() => undefined);
     const results = await Promise.all(
@@ -187,28 +200,37 @@ export function createDataStrategy(
   };
 }
 
-function toRouteObject(route: ClientRoute, servers: Set<string>): RouteObject {
+/** What the router needs from a page file. */
+function pageRoute(page: PageModule) {
+  return {
+    ...(page.default ? { Component: page.default } : {}),
+    ...(page.ErrorBoundary
+      ? { ErrorBoundary: errorBoundary(page.ErrorBoundary) }
+      : {}),
+    handle: { ...page.handle, meta: page.meta },
+  };
+}
+
+function toRouteObject(
+  route: ClientRoute,
+  servers: Set<string>,
+  loaded: ReadonlyMap<string, PageModule>,
+): RouteObject {
   if (route.server) {
     servers.add(route.id);
   }
   const children = route.children?.map((child) =>
-    toRouteObject(child, servers),
+    toRouteObject(child, servers, loaded),
   );
+  const page = loaded.get(route.id);
   const common = {
     id: route.id,
     ...(route.server
       ? { loader: serverLoader, action: serverAction(route.id) }
       : {}),
-    lazy: async () => {
-      const page = await route.page();
-      return {
-        ...(page.default ? { Component: page.default } : {}),
-        ...(page.ErrorBoundary
-          ? { ErrorBoundary: errorBoundary(page.ErrorBoundary) }
-          : {}),
-        handle: { ...page.handle, meta: page.meta },
-      };
-    },
+    ...(page
+      ? pageRoute(page)
+      : { lazy: async () => pageRoute(await route.page()) }),
   };
   return route.index
     ? { ...common, index: true }
@@ -217,6 +239,42 @@ function toRouteObject(route: ClientRoute, servers: Set<string>): RouteObject {
         ...(route.path === undefined ? {} : { path: route.path }),
         ...(children ? { children } : {}),
       };
+}
+
+/** A matched route as `meta` sees it. */
+type MetaMatch = Readonly<{
+  handle?: unknown;
+  data: unknown;
+  params: Readonly<Record<string, string | undefined>>;
+}>;
+
+/** The title and description of the deepest routes whose `meta` names them. */
+export function documentMeta(matches: readonly MetaMatch[]): {
+  title?: string;
+  description?: string;
+} {
+  const found: { title?: string; description?: string } = {};
+  for (const match of [...matches].reverse()) {
+    const meta = (match.handle as { meta?: MetaFunctionLike } | undefined)
+      ?.meta;
+    for (const descriptor of meta?.({
+      data: match.data,
+      params: match.params,
+    }) ?? []) {
+      const { title, name, content } = descriptor as {
+        title?: unknown;
+        name?: unknown;
+        content?: unknown;
+      };
+      if (title !== undefined) {
+        found.title ??= String(title);
+      }
+      if (name === "description" && content !== undefined) {
+        found.description ??= String(content);
+      }
+    }
+  }
+  return found;
 }
 
 /**
@@ -228,64 +286,121 @@ function DocumentTitle({ fallback }: { fallback: string }) {
   const matches = useMatches();
   const location = useLocation();
   useLayoutEffect(() => {
-    for (const match of [...matches].reverse()) {
-      const meta = (match.handle as { meta?: MetaFunctionLike } | undefined)
-        ?.meta;
-      const title = meta?.({ data: match.loaderData, params: match.params })
-        ?.map((descriptor) => (descriptor as { title?: unknown }).title)
-        .find((value) => value !== undefined);
-      if (title !== undefined) {
-        document.title = String(title);
-        return;
-      }
-    }
-    document.title = fallback;
+    document.title =
+      documentMeta(
+        matches.map((match) => ({ ...match, data: match.loaderData })),
+      ).title ?? fallback;
   }, [matches, location, fallback]);
   return null;
 }
 
 const Empty = () => null;
 
-/** Renders the app into `#root`. */
-export function startApp(app: AppDefinition): void {
-  const servers = new Set<string>();
+/**
+ * The router's route tree, and the ids of the routes with a server file. Pages
+ * in `loaded` are in place; the others load when a navigation needs them.
+ */
+export function createRoutes(
+  app: AppDefinition,
+  loaded: ReadonlyMap<string, PageModule> = new Map(),
+): { routes: RouteObject[]; servers: Set<string> } {
+  const servers = new Set<string>(app.rootServer ? ["root"] : []);
   const Root = app.root.default ?? Empty;
-  const fallback = document.title;
-  if (app.rootServer) {
-    servers.add("root");
+  const routes: RouteObject[] = [
+    {
+      id: "root",
+      path: "/",
+      Component: () => (
+        <>
+          <DocumentTitle fallback={app.title} />
+          <ScrollRestoration />
+          <Root />
+        </>
+      ),
+      ...(app.root.ErrorBoundary
+        ? { ErrorBoundary: errorBoundary(app.root.ErrorBoundary) }
+        : {}),
+      HydrateFallback: app.root.HydrateFallback ?? Empty,
+      handle: { ...app.root.handle, meta: app.root.meta },
+      ...(app.rootServer
+        ? { loader: serverLoader, action: serverAction("root") }
+        : {}),
+      children: app.routes.map((route) =>
+        toRouteObject(route, servers, loaded),
+      ),
+    },
+  ];
+  return { routes, servers };
+}
+
+function routeIndex(
+  routes: readonly ClientRoute[],
+  index = new Map<string, ClientRoute>(),
+): Map<string, ClientRoute> {
+  for (const route of routes) {
+    index.set(route.id, route);
+    routeIndex(route.children ?? [], index);
   }
-  const router = createBrowserRouter(
-    [
-      {
-        id: "root",
-        path: "/",
-        Component: () => (
-          <>
-            <DocumentTitle fallback={fallback} />
-            <ScrollRestoration />
-            <Root />
-          </>
-        ),
-        ...(app.root.ErrorBoundary
-          ? { ErrorBoundary: errorBoundary(app.root.ErrorBoundary) }
-          : {}),
-        HydrateFallback: app.root.HydrateFallback ?? Empty,
-        handle: { ...app.root.handle, meta: app.root.meta },
-        ...(app.rootServer
-          ? { loader: serverLoader, action: serverAction("root") }
-          : {}),
-        children: app.routes.map((route) => toRouteObject(route, servers)),
-      },
-    ],
-    { dataStrategy: createDataStrategy(servers) },
+  return index;
+}
+
+/** The pages of the routes `path` matches, loaded, so hydration needs no wait. */
+async function pagesFor(
+  app: AppDefinition,
+  path: string,
+): Promise<Map<string, PageModule>> {
+  const index = routeIndex(app.routes);
+  const matched = matchRoutes(createRoutes(app).routes, path) ?? [];
+  return new Map(
+    await Promise.all(
+      matched.flatMap(({ route }) => {
+        const declared =
+          route.id === undefined ? undefined : index.get(route.id);
+        return declared
+          ? [declared.page().then((page) => [declared.id, page] as const)]
+          : [];
+      }),
+    ),
   );
+}
+
+declare global {
+  interface Window {
+    __chromatisPrerender?: Prerendered;
+  }
+}
+
+/**
+ * Renders the app into `#root`, or hydrates it when the page was prerendered
+ * for this path. Hydration uses the build's data; the visitor's own (cookies,
+ * releases) replaces it right after.
+ */
+export async function startApp(app: AppDefinition): Promise<void> {
   const container = document.getElementById("root");
   if (!container) {
     throw new Error("index.html has no #root element");
   }
-  createRoot(container).render(
+  const prerendered = window.__chromatisPrerender;
+  const hydrate = prerendered?.path === window.location.pathname;
+  const { routes, servers } = createRoutes(
+    app,
+    hydrate ? await pagesFor(app, window.location.pathname) : undefined,
+  );
+  const router = createBrowserRouter(routes, {
+    dataStrategy: createDataStrategy(servers),
+    ...(hydrate ? { hydrationData: prerendered.hydrationData } : {}),
+  });
+  const tree = (
     <StrictMode>
       <RouterProvider router={router} />
-    </StrictMode>,
+    </StrictMode>
   );
+  if (hydrate) {
+    hydrateRoot(container, tree);
+    void router.revalidate();
+    return;
+  }
+  container.replaceChildren();
+  document.documentElement.removeAttribute(SHELL_ATTRIBUTE);
+  createRoot(container).render(tree);
 }

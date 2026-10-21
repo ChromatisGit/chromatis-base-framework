@@ -110,19 +110,21 @@ function staticFile(root: string, pathname: string): Response | undefined {
   } catch {
     return undefined;
   }
-  const file = path.resolve(root, `.${decoded}`);
-  if (
-    !file.startsWith(`${root}${path.sep}`) ||
-    !existsSync(file) ||
-    !statSync(file).isFile()
-  ) {
+  const requested = path.resolve(root, `.${decoded}`);
+  // A prerendered page is `<path>.html`, as Cloudflare's assets serve it.
+  const file = [requested, `${requested}.html`].find(
+    (candidate) => existsSync(candidate) && statSync(candidate).isFile(),
+  );
+  if (!requested.startsWith(`${root}${path.sep}`) || !file) {
     return undefined;
   }
   return new Response(Bun.file(file), {
     headers: {
       "Cache-Control": pathname.startsWith("/assets/")
         ? "public, max-age=31536000, immutable"
-        : "public, max-age=3600",
+        : file.endsWith(".html")
+          ? "no-cache"
+          : "public, max-age=3600",
     },
   });
 }
