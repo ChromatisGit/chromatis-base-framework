@@ -16,33 +16,92 @@ const cli = path.resolve(import.meta.dir, "chromatis.ts");
 const sandbox = path.resolve(import.meta.dir, "../../.e2e");
 
 /**
- * A product that declares its root and routes as data, a module with a route,
- * and an instance with one extra route of its own: no app/root.tsx, and no
- * route re-export files in the instance.
+ * A product that declares its root, document and routes as data, a module
+ * with a route, and an instance with a page and an API endpoint of its own.
+ * Pages render in the browser; what the server answers is their loaders' data.
  */
-const page = (mark: string, data = "null") =>
-  `export function loader() { return ${data}; }\nexport default function Page() { return <p>${mark}</p>; }\n`;
+const page = (mark: string) =>
+  `export default function Page() { return <p>${mark}</p>; }\n`;
+const loader = (data: string) =>
+  `export function loader() { return ${data}; }\n`;
 
 const product = {
   app: {
     root: "../app/root.tsx",
-    routes: [{ index: true, file: "../app/routes/home.tsx" }],
+    document: { lang: "de", title: "MARK_TITLE" },
+    public: "../public",
+    routes: [
+      {
+        index: true,
+        file: "../app/routes/home.tsx",
+        server: "../app/routes/home.server.ts",
+      },
+    ],
   },
   packageFiles: {
     "app/root.tsx":
       'import { Outlet } from "react-router";\nexport default function Root() { return <Outlet />; }\n',
-    "app/routes/home.tsx":
+    "app/routes/home.tsx": page("MARK_HOME"),
+    "app/routes/home.server.ts":
       'import { artifacts } from "chromatis-artifacts";\n' +
-      page("MARK_HOME", "Object.keys(artifacts.catalog?.files ?? {})"),
+      loader("Object.keys(artifacts.catalog?.files ?? {})"),
     "modules/live/routes/join.tsx": page("MARK_JOIN"),
+    "public/robots.txt": "MARK_PRODUCT_ROBOTS",
+    "public/_headers": "MARK_PRODUCT_HEADERS",
+    "public/icons/icon.svg": "<svg/>",
+    "modules/live/routes/join.server.ts": loader('"MARK_JOIN"'),
   },
 };
 
 const instanceFiles = {
   "app/routes.ts":
-    'import { type RouteConfig, route } from "@react-router/dev/routes";\nexport default [route("landing", "routes/landing.tsx")] satisfies RouteConfig;\n',
+    'export default [\n  { path: "landing", file: "./routes/landing.tsx", server: "./routes/landing.server.ts" },\n  { path: "api/ping", api: true, file: "./routes/ping.ts" },\n];\n',
   "app/routes/landing.tsx": page("MARK_LANDING"),
+  "app/routes/landing.server.ts": loader('"MARK_LANDING"'),
+  "app/routes/ping.ts":
+    'export function GET() { return new Response("MARK_PING"); }\n',
+  // The instance's own static file wins over the product's.
+  "public/_headers": "MARK_INSTANCE_HEADERS",
 };
+
+/** What a running server answers for the pages, their data and the endpoint. */
+async function expectServed(origin: string) {
+  const text = async (url: string, init?: RequestInit) => {
+    const response = await fetch(`${origin}${url}`, init);
+    expect(response.status).toBe(200);
+    return response.text();
+  };
+  const html = { headers: { Accept: "text/html" } };
+  expect(await text("/", html)).toContain("<title>MARK_TITLE</title>");
+  expect(await text("/landing", html)).toContain('<div id="root"></div>');
+  expect(await text("/_chromatis/data?_routes=routes/home")).toContain(
+    "nested/data.json",
+  );
+  expect(await text("/_chromatis/data/join?_routes=routes/join")).toBe(
+    '{"results":{"routes/join":{"data":"MARK_JOIN"}}}',
+  );
+  expect(await text("/_chromatis/data/landing?_routes=routes/landing")).toBe(
+    '{"results":{"routes/landing":{"data":"MARK_LANDING"}}}',
+  );
+  expect(await text("/api/ping")).toBe("MARK_PING");
+  expect(await text("/robots.txt")).toBe("MARK_PRODUCT_ROBOTS");
+  expect(await text("/icons/icon.svg")).toBe("<svg/>");
+}
+
+/** Waits until `url` answers at all. */
+async function waitFor(url: string, attempts: number, delay: number) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      if ((await fetch(url)).ok) {
+        return true;
+      }
+    } catch {
+      // Not listening yet.
+    }
+    await Bun.sleep(delay);
+  }
+  return false;
+}
 
 async function instance(target: string) {
   const { mkdirSync } = await import("node:fs");
@@ -54,7 +113,7 @@ async function instance(target: string) {
     modules: {
       artifact: hookedModule,
       live: {
-        body: 'routes: [{ path: "join", file: "./routes/join.tsx" }]',
+        body: 'routes: [{ path: "join", file: "./routes/join.tsx", server: "./routes/join.server.ts" }]',
       },
     },
     config: {
@@ -62,8 +121,6 @@ async function instance(target: string) {
     },
     files: instanceFiles,
     extraDependencies: {
-      "@react-router/node": "*",
-      isbot: "*",
       react: "*",
       "react-dom": "*",
       "react-router": "*",
@@ -86,10 +143,24 @@ for (const target of ["bun", "cloudflare"]) {
         path.join(root, ".chromatis/artifacts/catalog/catalog.meta.json"),
       ),
     ).toBe(true);
-    const bundle = readFileSync(
-      path.join(root, "build/server/index.js"),
-      "utf8",
-    );
+    // The Worker as Vite's Cloudflare plugin wrote it; the Bun server as
+    // `chromatis build` bundled it into the image.
+    const server =
+      target === "cloudflare"
+        ? path.join(
+            root,
+            "build/server",
+            (
+              JSON.parse(
+                readFileSync(
+                  path.join(root, "build/server/wrangler.json"),
+                  "utf8",
+                ),
+              ) as { main: string }
+            ).main,
+          )
+        : path.join(root, ".chromatis/image/server.js");
+    const bundle = readFileSync(server, "utf8");
     expect(bundle).toContain("nested/data.json");
     expect(bundle).toContain(
       Buffer.from(
@@ -99,6 +170,19 @@ for (const target of ["bun", "cloudflare"]) {
     expect(existsSync(path.join(root, ".chromatis/build/config.ts"))).toBe(
       true,
     );
+    const document = readFileSync(
+      path.join(root, "build/client/index.html"),
+      "utf8",
+    );
+    expect(document).toContain("<title>MARK_TITLE</title>");
+    const client = (file: string) =>
+      readFileSync(path.join(root, "build/client", file), "utf8");
+    expect(client("robots.txt")).toBe("MARK_PRODUCT_ROBOTS");
+    expect(client("icons/icon.svg")).toBe("<svg/>");
+    expect(client("_headers")).toBe("MARK_INSTANCE_HEADERS");
+    expect(document).toMatch(
+      /<script type="module" crossorigin src="\/assets\/[^"]+\.js">/,
+    );
     if (target === "cloudflare") {
       const worker = readFileSync(
         path.join(root, ".chromatis/build/worker.ts"),
@@ -107,30 +191,33 @@ for (const target of ["bun", "cloudflare"]) {
       expect(worker).toContain("hook.ts");
       expect(bundle).toContain("module config is not available at import time");
       expect(bundle).toContain("https://app.example.org");
+      const wrangler = JSON.parse(
+        readFileSync(path.join(root, "build/server/wrangler.json"), "utf8"),
+      ) as {
+        assets?: { not_found_handling?: string; run_worker_first?: string[] };
+      };
+      expect(wrangler.assets?.not_found_handling).toBe(
+        "single-page-application",
+      );
+      expect(wrangler.assets?.run_worker_first).toContain("/api/ping");
       return;
     }
-    // The Bun/Docker image runs: hook, config and artifacts resolve at load.
+    // The Bun/Docker image runs: hook, config and artifacts resolve at load,
+    // and it serves the document for every page path.
     const image = path.join(root, ".chromatis/image");
     const port = 20000 + Math.floor(Math.random() * 20000);
-    const server = Bun.spawn(["bun", "server.js"], {
+    const running = Bun.spawn(["bun", "server.js"], {
       cwd: image,
       env: { ...process.env, PORT: String(port) },
       stdout: "pipe",
       stderr: "pipe",
     });
     try {
-      let healthy = false;
-      for (let attempt = 0; attempt < 50 && !healthy; attempt++) {
-        try {
-          healthy = (await fetch(`http://localhost:${port}/_chromatis/health`))
-            .ok;
-        } catch {
-          await Bun.sleep(100);
-        }
-      }
-      expect(healthy).toBe(true);
+      const origin = `http://localhost:${port}`;
+      expect(await waitFor(`${origin}/_chromatis/health`, 50, 100)).toBe(true);
+      await expectServed(origin);
     } finally {
-      server.kill();
+      running.kill();
     }
   }, 60_000);
 }
@@ -146,40 +233,25 @@ test("the dev server serves product, module and instance routes through the gene
     [
       "bun",
       "x",
-      "react-router",
-      "dev",
+      "vite",
       "--config",
       path.resolve(import.meta.dir, "../../src/vite.js"),
       "--port",
       String(port),
+      "--strictPort",
     ],
-    {
-      cwd: root,
-      env: { ...process.env, REACT_ROUTER_ROOT: root },
-      stdout: "pipe",
-      stderr: "pipe",
-    },
+    { cwd: root, stdout: "pipe", stderr: "pipe" },
   );
   try {
-    for (const [url, mark] of [
-      ["/", "MARK_HOME"],
-      ["/join", "MARK_JOIN"],
-      ["/landing", "MARK_LANDING"],
-    ] as const) {
-      let text = "";
-      for (let attempt = 0; attempt < 100; attempt++) {
-        try {
-          const response = await fetch(`http://localhost:${port}${url}`);
-          text = await response.text();
-          if (response.status === 200) {
-            break;
-          }
-        } catch {
-          await Bun.sleep(200);
-        }
-      }
-      expect(text).toContain(mark);
-    }
+    const origin = `http://localhost:${port}`;
+    expect(await waitFor(`${origin}/api/ping`, 100, 200)).toBe(true);
+    await expectServed(origin);
+    // The browser entry lists the routes with their lazy pages.
+    const entry = await (
+      await fetch(`${origin}/.chromatis/app/main.tsx`)
+    ).text();
+    expect(entry).toContain('"routes/landing"');
+    expect(entry).toContain("server: true");
   } finally {
     server.kill();
   }

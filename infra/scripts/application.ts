@@ -4,8 +4,9 @@ import { pathToFileURL } from "node:url";
 import type { ServerHook } from "../../src/server.js";
 import type { ResolvedApplication } from "./resolvedApplication.js";
 import { writeAppDirectory } from "./appDirectory.js";
+import { flattenRoutes } from "./routes.js";
 import { registerVirtualModules, writeConfigModule } from "./virtualModules.js";
-import { writeGeneratedTooling, writeRouterConfig } from "./tooling.js";
+import { writeGeneratedTooling } from "./tooling.js";
 
 export const frameworkRoot = path.resolve(import.meta.dir, "../..");
 
@@ -38,7 +39,9 @@ export async function loadHook(
 
 type Migration = {
   tag: string;
+  /** Legacy key from before Workers Free; read but never written. */
   new_classes?: string[];
+  new_sqlite_classes?: string[];
   deleted_classes?: string[];
 };
 type Ledger = { migrations: Migration[] };
@@ -66,7 +69,10 @@ export function migrationPlan(
         `Runtime migration tags are inconsistent; restore ${LEDGER_FILE} from Git and run chromatis build`,
       );
     }
-    for (const name of migration.new_classes ?? []) {
+    for (const name of [
+      ...(migration.new_classes ?? []),
+      ...(migration.new_sqlite_classes ?? []),
+    ]) {
       if (current.has(name)) {
         throw new Error(
           `Runtime migration ${migration.tag} adds ${name} twice; restore the ledger from Git and run chromatis build`,
@@ -89,7 +95,8 @@ export function migrationPlan(
   if (added.length || deleted.length) {
     ledger.migrations.push({
       tag: `v${ledger.migrations.length + 1}`,
-      ...(added.length ? { new_classes: added } : {}),
+      // The Workers Free plan only accepts SQLite-backed Durable Objects.
+      ...(added.length ? { new_sqlite_classes: added } : {}),
       ...(deleted.length ? { deleted_classes: deleted } : {}),
     });
     if (persist) {
@@ -106,8 +113,8 @@ export const runtimeBinding = (kind: string): string =>
   `RUNTIME_${kind.replaceAll("-", "_").toUpperCase()}`;
 
 /**
- * Facts the Vite config needs. `src/vite.js` runs inside React Router's CLI and
- * reads this file instead of re-deriving them from the instance.
+ * Facts the Vite config needs. `src/vite.js` runs inside Vite's CLI and reads
+ * this file instead of re-deriving them from the instance.
  */
 export function writeBuildContext(
   output: string,
@@ -120,11 +127,30 @@ export function writeBuildContext(
         serverHook: app.serverHook ?? null,
         bundledPackages: app.bundledPackages,
         allowedRoots: app.allowedRoots,
+        productPublic: app.shell.publicDirectory ?? null,
       },
       null,
       2,
     )}\n`,
   );
+}
+
+/**
+ * Paths Cloudflare hands to the Worker before looking for a static file: the
+ * framework's own and every API endpoint (a `:param` segment and what follows
+ * become a wildcard).
+ */
+export function workerPaths(app: ResolvedApplication): string[] {
+  const endpoints = flattenRoutes(app.shell.routes)
+    .filter((route) => route.kind === "api" && route.url !== undefined)
+    .map((route) => {
+      const segments = (route.url ?? "/").split("/").filter(Boolean);
+      const fixed = segments.findIndex((segment) => segment.startsWith(":"));
+      return fixed === -1
+        ? `/${segments.join("/")}`
+        : `/${[...segments.slice(0, fixed), "*"].join("/")}`;
+    });
+  return [...new Set(["/_chromatis/*", ...endpoints])];
 }
 
 export function generateArtifacts(
@@ -134,7 +160,6 @@ export function generateArtifacts(
 ) {
   const output = path.join(root, ".chromatis", "build");
   mkdirSync(output, { recursive: true });
-  writeRouterConfig(root);
   writeAppDirectory(root, declaration);
   writeGeneratedTooling(root);
   writeConfigModule(root, declaration);
@@ -157,8 +182,8 @@ export function generateArtifacts(
     path.join(frameworkRoot, "src/stateful/cloudflare.ts"),
   );
   const worker = [
-    'import * as build from "virtual:react-router/server-build";',
     `import { createFrameworkWorker } from ${serverImport};`,
+    'import * as routes from "./routes";',
     ...(hookImport ? [`import hook from ${hookImport};`] : []),
     ...(declaration.runtime.length
       ? [`import { createRuntimeDurableObject } from ${cloudflareImport};`]
@@ -167,13 +192,14 @@ export function generateArtifacts(
       (kind) =>
         `export const ${runtimeClass(kind)} = createRuntimeDurableObject(hook.definitions.filter((definition) => definition.kind === ${JSON.stringify(kind)}));`,
     ),
-    `export default createFrameworkWorker(build, ${hookImport ? "hook" : "undefined"}, ${JSON.stringify(bindings)});`,
+    `export default createFrameworkWorker(routes, ${hookImport ? "hook" : "undefined"}, ${JSON.stringify(bindings)});`,
   ].join("\n");
   writeFileSync(path.join(output, "worker.ts"), `${worker}\n`);
   const bun = [
     `import { startFrameworkBun } from ${serverImport};`,
+    'import * as routes from "./routes";',
     ...(hookImport ? [`import hook from ${hookImport};`] : []),
-    `await startFrameworkBun(${hookImport ? "hook" : ""});`,
+    `await startFrameworkBun(routes, ${hookImport ? "hook" : "undefined"});`,
   ].join("\n");
   writeFileSync(path.join(output, "bun.ts"), `${bun}\n`);
   const config = {
@@ -192,6 +218,12 @@ export function generateArtifacts(
           migrations,
         }
       : {}),
+    // Pages are static files; the Worker answers data, API endpoints and
+    // nothing else, so a page view costs no Worker CPU at all.
+    assets: {
+      not_found_handling: "single-page-application",
+      run_worker_first: workerPaths(declaration),
+    },
     vars: { PUBLIC_URL: declaration.publicUrl },
   };
   const wranglerPath = path.join(output, "wrangler.json");

@@ -3,6 +3,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
@@ -42,15 +43,8 @@ export const generatedTsconfig = `{
   "extends": "@chromatis/base/infra/tsconfig",
   "compilerOptions": {
     "types": ["node", "bun", "vite/client"],
-    "rootDirs": ["..", "../.react-router/types"]
   },
-  "include": [
-    "../app",
-    "../src",
-    "../server",
-    "../.react-router/types/**/*",
-    "types.d.ts"
-  ]
+  "include": ["../app", "../src", "../server", "types.d.ts"]
 }
 `;
 export const generatedEslint = `import base from "@chromatis/base/infra/eslint";
@@ -60,9 +54,7 @@ export default [
     ignores: [
       "node_modules/**",
       "build/**",
-      ".react-router/**",
       ".chromatis/**",
-      "react-router.config.ts",
     ],
   },
   ...base,
@@ -78,30 +70,8 @@ export const generatedTypes = readFileSync(
   "utf8",
 );
 
-/** Where Chromatis generates React Router's app directory (git-ignored). */
+/** Where Chromatis generates the browser app's `index.html` and entry (git-ignored). */
 export const APP_DIRECTORY = ".chromatis/app";
-
-export const generatedRouterConfig = `export default {
-  ssr: true,
-  appDirectory: ${JSON.stringify(APP_DIRECTORY)},
-  future: {
-    v8_middleware: true,
-    v8_splitRouteModules: true,
-    v8_viteEnvironmentApi: true,
-    v8_passThroughRequests: true,
-    v8_trailingSlashAwareDataRequests: true,
-  },
-};
-`;
-export const generatedCloudflareEntry = `import { ServerRouter, type EntryContext } from "react-router";
-import { renderToReadableStream } from "react-dom/server";
-
-export default async function handleRequest(request: Request, status: number, headers: Headers, context: EntryContext) {
-  const body = await renderToReadableStream(<ServerRouter context={context} url={request.url} />);
-  headers.set("Content-Type", "text/html");
-  return new Response(body, { status, headers });
-}
-`;
 
 /** Root files an instance keeps; they only point at the generated ones. */
 export function expectedTooling(): Readonly<Record<string, string>> {
@@ -120,8 +90,26 @@ export function generatedTooling(): Readonly<Record<string, string>> {
   };
 }
 
+/**
+ * What earlier versions generated for React Router's framework mode. Left in
+ * place, its stale route types break the instance's lint and typecheck.
+ */
+function routerLeftovers(root: string): string[] {
+  const config = path.join(root, "react-router.config.ts");
+  return [
+    ...(existsSync(path.join(root, ".react-router")) ? [".react-router"] : []),
+    ...(existsSync(config) &&
+    readFileSync(config, "utf8").includes('appDirectory: ".chromatis/app"')
+      ? ["react-router.config.ts"]
+      : []),
+  ];
+}
+
 export function checkTooling(root = process.cwd()): string[] {
-  const problems: string[] = [];
+  const problems: string[] = routerLeftovers(root).map(
+    (file) =>
+      `${file} is left over from React Router's framework mode; run chromatis init`,
+  );
   for (const [file, expected] of [
     ...Object.entries(expectedTooling()),
     ...Object.entries(generatedTooling()),
@@ -147,6 +135,9 @@ export function writeGeneratedTooling(root: string): void {
 }
 
 export function repairTooling(root = process.cwd()): void {
+  for (const file of routerLeftovers(root)) {
+    rmSync(path.join(root, file), { recursive: true, force: true });
+  }
   for (const [file, expected] of Object.entries(expectedTooling())) {
     writeFileSync(path.join(root, file), expected);
   }
@@ -154,7 +145,6 @@ export function repairTooling(root = process.cwd()): void {
   const ignorePath = path.join(root, ".gitignore");
   const ignore = existsSync(ignorePath) ? readFileSync(ignorePath, "utf8") : "";
   const additions = [
-    "/react-router.config.ts",
     "/.chromatis/*",
     "!/.chromatis/runtime-migrations.json",
     "/.wrangler/",
@@ -165,11 +155,4 @@ export function repairTooling(root = process.cwd()): void {
       `${ignore.replace(/\n?$/, "\n")}${additions.join("\n")}\n`,
     );
   }
-}
-
-export function writeRouterConfig(root = process.cwd()): void {
-  writeFileSync(
-    path.join(root, "react-router.config.ts"),
-    generatedRouterConfig,
-  );
 }

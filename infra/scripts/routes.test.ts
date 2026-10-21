@@ -18,14 +18,25 @@ import {
 afterEach(cleanupFixtures);
 
 const component = "export default function Page() { return null; }\n";
-const withLoader = `export function loader() { return null; }\n${component}`;
+const loader = "export function loader() { return null; }\n";
+const endpoint = "export function GET() { return new Response('ok'); }\n";
 
-/** A product package: its own root, index, a shell layout, and a "live" module. */
+/**
+ * A product package: its own root and document, an index with a server file,
+ * an API endpoint, a shell layout, and a "live" module.
+ */
 export const productPackage: FixtureOptions = {
   app: {
     root: "../app/root.tsx",
+    server: "../app/root.server.ts",
+    document: { lang: "de", title: "Product & <Co>", icon: "/favicon.svg" },
     routes: [
-      { index: true, file: "../app/routes/home.tsx" },
+      {
+        index: true,
+        file: "../app/routes/home.tsx",
+        server: "../app/routes/home.server.ts",
+      },
+      { path: "api/health", api: true, file: "../app/routes/health.ts" },
       {
         layout: true,
         file: "../app/routes/shell.tsx",
@@ -38,15 +49,18 @@ export const productPackage: FixtureOptions = {
   },
   packageFiles: {
     "app/root.tsx": `export function ErrorBoundary() { return null; }\n${component}`,
-    "app/routes/home.tsx": withLoader,
+    "app/root.server.ts": loader,
+    "app/routes/home.tsx": component,
+    "app/routes/home.server.ts": loader,
+    "app/routes/health.ts": endpoint,
     "app/routes/shell.tsx": component,
-    "app/routes/courses.tsx": withLoader,
+    "app/routes/courses.tsx": component,
     "app/routes/login.tsx": component,
   },
   modules: {
     live: {
-      body: `routes: [{ path: "join", file: "./routes/join.tsx", id: "join-form" }, { path: ":code", file: "./routes/join.tsx" }]`,
-      files: { "routes/join.tsx": withLoader },
+      body: `routes: [{ path: "join", file: "./routes/join.tsx", id: "join-form" }, { path: ":code", file: "./routes/join.tsx", server: "./routes/join.server.ts" }]`,
+      files: { "routes/join.tsx": component, "routes/join.server.ts": loader },
     },
   },
   config: { "app.toml": APP_TOML },
@@ -62,16 +76,25 @@ describe("product routes", () => {
     const instance = await loadInstance(root, "local");
     expect(instance.problems).toEqual([]);
     expect(
-      flattenRoutes(instance.shell.routes).map((r) => [r.id, r.url, r.owner]),
+      flattenRoutes(instance.shell.routes).map((r) => [
+        r.id,
+        r.kind,
+        r.url,
+        r.owner,
+        r.server !== undefined,
+      ]),
     ).toEqual([
-      ["routes/home", "/", "app"],
-      ["routes/shell", undefined, "app"],
-      ["routes/courses", "/courses", "app"],
-      ["routes/login", "/login", "app"],
-      ["join-form", "/join", "live"],
-      ["routes/join", "/:code", "live"],
+      ["routes/home", "index", "/", "app", true],
+      ["routes/health", "api", "/api/health", "app", false],
+      ["routes/shell", "layout", undefined, "app", false],
+      ["routes/courses", "route", "/courses", "app", false],
+      ["routes/login", "route", "/login", "app", false],
+      ["join-form", "route", "/join", "live", false],
+      ["routes/join", "route", "/:code", "live", true],
     ]);
     expect(instance.shell.root?.from).toEndWith("app/root");
+    expect(instance.shell.rootServer?.from).toEndWith("app/root.server");
+    expect(instance.shell.rootSource).toBe("product");
   });
 
   test("a disabled module drops its routes", async () => {
@@ -86,67 +109,137 @@ describe("product routes", () => {
     expect(instance.problems).toEqual([]);
   });
 
-  test("the generated app directory re-exports each route with its real export names", async () => {
+  test("the generated app directory holds the document and the browser entry", async () => {
     const { root } = await createInstance(productPackage);
     generateArtifacts(root, await resolveApplication(root, "local"));
-    const directory = path.join(root, ".chromatis/app");
-    const read = (file: string) =>
-      readFileSync(path.join(directory, file), "utf8");
-    expect(read("root.tsx")).toMatch(
-      /^export \{ default, ErrorBoundary \} from ".*app\/root";\n$/,
+    const read = (file: string) => readFileSync(path.join(root, file), "utf8");
+    const html = read(".chromatis/app/index.html");
+    expect(html).toContain('<html lang="de">');
+    expect(html).toContain("<title>Product &amp; &lt;Co&gt;</title>");
+    expect(html).toContain(
+      '<link rel="icon" type="image/svg+xml" href="/favicon.svg" />',
     );
-    expect(read("routes/routes_home.tsx")).toMatch(
-      /^export \{ default, loader \} from /,
+    expect(html).toContain(
+      '<script type="module" src="/.chromatis/app/main.tsx">',
     );
-    const routes = read("routes.ts");
-    expect(routes).toContain('"id": "routes/home"');
-    expect(routes).toContain('"index": true');
-    expect(routes).toContain('"path": ":code"');
-    expect(routes).toContain("export default product;");
-    expect(read("../../react-router.config.ts")).toBe(
-      `export default {
-  ssr: true,
-  appDirectory: ".chromatis/app",
-  future: {
-    v8_middleware: true,
-    v8_splitRouteModules: true,
-    v8_viteEnvironmentApi: true,
-    v8_passThroughRequests: true,
-    v8_trailingSlashAwareDataRequests: true,
-  },
-};
-`,
+
+    const entry = read(".chromatis/app/main.tsx");
+    expect(entry).toMatch(/^import \{ startApp \} from ".*src\/client\.tsx";/);
+    expect(entry).toMatch(/import \* as root from ".*app\/root";/);
+    expect(entry).toContain("rootServer: true,");
+    expect(entry).toContain(
+      'id: "routes/home",\n      index: true,\n      server: true,',
     );
+    expect(entry).toContain('path: ":code",');
+    // API endpoints have no page.
+    expect(entry).not.toContain("routes/health");
+
+    const tables = read(".chromatis/build/routes.ts");
+    expect(tables).toContain('{ path: "/api/health", module: module');
+    expect(tables).toContain('{ id: "root", path: undefined, module: module');
+    expect(tables).toContain(
+      '{ id: "routes/shell", path: undefined, module: undefined }',
+    );
+    expect(tables).toContain(
+      '{ id: "routes/join", path: "/:code", module: module',
+    );
+    expect(existsSync(path.join(root, "react-router.config.ts"))).toBe(false);
+  });
+
+  test("the product's static directory resolves next to the manifest", async () => {
+    const { root } = await createInstance({
+      ...productPackage,
+      app: { ...productPackage.app, public: "../public" },
+      packageFiles: { ...productPackage.packageFiles, "public/robots.txt": "" },
+    });
+    const instance = await loadInstance(root, "local");
+    expect(instance.problems).toEqual([]);
+    expect(instance.shell.publicDirectory).toEndWith(`${path.sep}public`);
+    const missing = await createInstance({
+      ...productPackage,
+      app: { ...productPackage.app, public: "../static" },
+    });
+    expect(await problemsOf(missing.root)).toEqual([
+      "public: app: ../static is not a directory next to the manifest",
+    ]);
+  });
+
+  test("pages need a document", async () => {
+    const { root } = await createInstance({
+      ...productPackage,
+      app: {
+        root: "../app/root.tsx",
+        routes: productPackage.app?.routes ?? [],
+      },
+    });
+    expect(await problemsOf(root)).toEqual([
+      "root: the product declares pages but no document; declare app.document in the manifest",
+    ]);
   });
 });
 
 describe("instance routes and root", () => {
   const own = {
     "app/root.tsx": component,
-    "app/routes.ts": `import { type RouteConfig, index, route } from "@react-router/dev/routes";\nexport default [route("landing", "routes/landing.tsx")] satisfies RouteConfig;\n`,
+    "app/root.server.ts": loader,
+    "app/routes.ts": `export default [{ path: "landing", file: "./routes/landing.tsx", server: "./routes/landing.server.ts" }, { path: "api/demo", api: true, file: "./routes/demo.ts" }];\n`,
     "app/routes/landing.tsx": component,
+    "app/routes/landing.server.ts": loader,
+    "app/routes/demo.ts": endpoint,
   };
 
   test("the instance root replaces the product root; its routes are appended", async () => {
     const { root } = await createInstance({ ...productPackage, files: own });
-    generateArtifacts(root, await resolveApplication(root, "local"));
-    const directory = path.join(root, ".chromatis/app");
-    expect(readFileSync(path.join(directory, "root.tsx"), "utf8")).toContain(
-      path.join(root, "app/root"),
+    const instance = await loadInstance(root, "local");
+    expect(instance.problems).toEqual([]);
+    expect(instance.shell.rootSource).toBe("instance");
+    expect(instance.shell.root?.from).toBe(path.join(root, "app/root"));
+    expect(instance.shell.rootServer?.from).toBe(
+      path.join(root, "app/root.server"),
     );
-    const routes = readFileSync(path.join(directory, "routes.ts"), "utf8");
-    expect(routes).toContain('import extra from "../../app/routes";');
-    expect(routes).toContain("rebase(await extra)");
+    expect(
+      flattenRoutes(instance.shell.routes)
+        .filter((r) => r.owner === "instance")
+        .map((r) => [r.id, r.url, r.file, r.server]),
+    ).toEqual([
+      [
+        "routes/landing",
+        "/landing",
+        path.join(root, "app/routes/landing"),
+        path.join(root, "app/routes/landing.server"),
+      ],
+      [
+        "routes/demo",
+        "/api/demo",
+        path.join(root, "app/routes/demo"),
+        undefined,
+      ],
+    ]);
   });
 
-  test("the instance routes evaluate as React Router route config", async () => {
+  test("an instance root without a server file has no root loader", async () => {
     const { root } = await createInstance({
       ...productPackage,
-      files: { ...own, "app/root.tsx": component },
-      linkChromatis: true,
-      inside: path.resolve(import.meta.dir, "../../.e2e"),
+      files: { "app/root.tsx": component },
     });
-    expect(await problemsOf(root)).toEqual([]);
+    const instance = await loadInstance(root, "local");
+    expect(instance.shell.rootSource).toBe("instance");
+    expect(instance.shell.rootServer).toBeUndefined();
+  });
+
+  test("app/routes.ts must default export route declarations", async () => {
+    const { root } = await createInstance({
+      ...productPackage,
+      files: {
+        "app/routes.ts": `export default [{ file: "./routes/landing.tsx" }];\n`,
+        "app/routes/landing.tsx": component,
+      },
+    });
+    const found = await problemsOf(root);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toStartWith(
+      "app/routes.ts: must default export a list of route declarations",
+    );
   });
 });
 
@@ -155,7 +248,7 @@ describe("route checks", () => {
     const { root } = await createInstance({
       ...productPackage,
       app: {
-        root: "../app/root.tsx",
+        ...productPackage.app,
         routes: [{ path: "gone", file: "../app/routes/gone.tsx" }],
       },
     });
@@ -184,17 +277,18 @@ describe("route checks", () => {
 });
 
 describe("route checks against the instance", () => {
-  test("a product that has routes needs a root", async () => {
-    const { root } = await createInstance({
-      ...productPackage,
-      app: { routes: [{ index: true, file: "../app/routes/home.tsx" }] },
-    });
+  test("a product that has pages needs a root", async () => {
+    const app = {
+      document: { lang: "de", title: "Product" },
+      routes: [{ index: true as const, file: "../app/routes/home.tsx" }],
+    };
+    const { root } = await createInstance({ ...productPackage, app });
     expect(await problemsOf(root)).toEqual([
-      "root: the product declares routes but no root; add app/root.tsx or declare app.root in the manifest",
+      "root: the product declares pages but no root; add app/root.tsx or declare app.root in the manifest",
     ]);
     const own = await createInstance({
       ...productPackage,
-      app: { routes: [{ index: true, file: "../app/routes/home.tsx" }] },
+      app,
       files: { "app/root.tsx": component },
     });
     expect(await problemsOf(own.root)).toEqual([]);
@@ -202,7 +296,7 @@ describe("route checks against the instance", () => {
 
   test("instance routes may not reuse a product path or id unless the path is omitted", async () => {
     const clash = {
-      "app/routes.ts": `export default [{ index: true, file: "routes/home.tsx" }];\n`,
+      "app/routes.ts": `export default [{ index: true, file: "./routes/home.tsx" }];\n`,
       "app/routes/home.tsx": component,
     };
     const { root } = await createInstance({ ...productPackage, files: clash });
@@ -211,14 +305,16 @@ describe("route checks against the instance", () => {
       found.some(
         (line) =>
           line.startsWith(
-            'app/routes.ts: route id "routes/home" is already used by app (',
-          ) && line.endsWith("; set an explicit id"),
+            'routes: route id "routes/home" is declared by app (',
+          ) &&
+          line.includes(") and instance (") &&
+          line.endsWith("; set an explicit id"),
       ),
     ).toBe(true);
     expect(
       found.some(
         (line) =>
-          line.includes('route path "/" is already used') &&
+          line.startsWith('routes: route path "/" is declared by app (') &&
           line.includes("[routes] omit"),
       ),
     ).toBe(true);
@@ -227,15 +323,16 @@ describe("route checks against the instance", () => {
       ...productPackage,
       config: { "app.toml": `${APP_TOML}\n[routes]\nomit = ["/"]\n` },
       files: {
-        "app/routes.ts": `export default [{ index: true, id: "landing", file: "routes/landing.tsx" }];\n`,
+        "app/routes.ts": `export default [{ index: true, id: "landing", file: "./routes/landing.tsx" }];\n`,
         "app/routes/landing.tsx": component,
       },
     });
     expect(await problemsOf(replaced.root)).toEqual([]);
     const instance = await loadInstance(replaced.root, "local");
-    expect(
-      flattenRoutes(instance.shell.routes).map((r) => r.url),
-    ).not.toContain("/");
+    const home = flattenRoutes(instance.shell.routes).filter(
+      (r) => r.url === "/",
+    );
+    expect(home.map((r) => [r.id, r.owner])).toEqual([["landing", "instance"]]);
     expect(instance.shell.omitted).toEqual(["/"]);
   });
 
@@ -275,7 +372,7 @@ describe("inspect lists routes", () => {
       ...productPackage,
       config: { "app.toml": `${APP_TOML}\n[routes]\nomit = ["/login"]\n` },
       files: {
-        "app/routes.ts": `export default [{ path: "landing", file: "routes/landing.tsx" }];\n`,
+        "app/routes.ts": `export default [{ path: "landing", file: "./routes/landing.tsx" }];\n`,
         "app/routes/landing.tsx": component,
       },
     });
@@ -283,6 +380,7 @@ describe("inspect lists routes", () => {
     expect(report.shell?.root.source).toBe("product");
     expect(report.shell?.routes.map((r) => r.url)).toEqual([
       "/",
+      "/api/health",
       undefined,
       "/courses",
       "/join",

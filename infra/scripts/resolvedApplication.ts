@@ -1,5 +1,6 @@
 import type { ConfigEnvironment } from "../../src/config.js";
 import type { DeclaredSecret } from "./moduleSet.js";
+import type { AppDocument } from "../../src/module.js";
 
 /** `docker` is the Bun server deployment (config target `bun`). */
 export type BuildTarget = "cloudflare" | "docker";
@@ -36,24 +37,37 @@ export type ResolvedArtifact = Readonly<{
   validator: CodeReference | undefined;
 }>;
 
-/** A route of the product package after file resolution. */
+/** A route of the product package or the instance after file resolution. */
 export type ResolvedRoute = Readonly<{
-  /** Unique across the application; the React Router route id. */
+  /** Unique across the application; the browser router's route id. */
   id: string;
-  /** Declaring module, or `app` for the package's own routes. */
+  /** Declaring module, `app` for the package's own routes, or `instance`. */
   owner: string;
-  kind: "route" | "index" | "layout";
+  kind: "route" | "index" | "layout" | "api";
   path: string | undefined;
   /** What a generated route file re-exports: a specifier, or an absolute path. */
   from: string;
-  /** The resolved source file (its exports are read to write the re-export). */
+  /** The resolved source file. */
   file: string;
+  /** The page's server file (`loader`, `action`). */
+  server: ResolvedFile | undefined;
   children: readonly ResolvedRoute[];
 }>;
 
+/** A declared file: how generated code imports it, and where it is. */
+export type ResolvedFile = Readonly<{ from: string; file: string }>;
+
 /** The application shell the product provides: root and routes. */
 export type ResolvedShell = Readonly<{
-  root: Readonly<{ from: string; file: string }> | undefined;
+  /** The root component; the instance's `app/root.tsx` wins. */
+  root: ResolvedFile | undefined;
+  /** The root's server file (with the instance root: `app/root.server.ts`). */
+  rootServer: ResolvedFile | undefined;
+  rootSource: "instance" | "product" | "none";
+  document: AppDocument | undefined;
+  /** The product's static files (manifest `app.public`), an absolute directory. */
+  publicDirectory: string | undefined;
+  /** The product's routes, then the instance's own (`app/routes.ts`). */
   routes: readonly ResolvedRoute[];
   /** Product route paths the instance replaces (`[routes] omit`). */
   omitted: readonly string[];

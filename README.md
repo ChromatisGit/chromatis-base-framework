@@ -67,7 +67,7 @@ Chromatis finds the manifest by scanning the instance's direct dependencies for 
 
 ## Instances
 
-An instance contains: `package.json` (dependencies, and scripts that call `chromatis`), `config/*.toml`, content or `public/` assets, the two root stubs `tsconfig.json` and `eslint.config.js` (one line each, extending the generated files in `.chromatis/`; TypeScript, editors, `vite-tsconfig-paths` and ESLint look for them at the project root), and optionally `app/routes.ts`, `app/root.tsx` and the files they reference. Dependencies must include `react`, `react-dom`, `react-router`, `@react-router/node` and `isbot`, because React Router inspects the app's own `package.json`. Wrangler configuration, Dockerfile, compose file, Vite and React Router configuration, route re-export files and the React Router app directory are generated under the git-ignored `.chromatis/`.
+An instance contains: `package.json` (dependencies, and scripts that call `chromatis`), `config/*.toml`, content or `public/` assets, the two root stubs `tsconfig.json` and `eslint.config.js` (one line each, extending the generated files in `.chromatis/`; TypeScript, editors, `vite-tsconfig-paths` and ESLint look for them at the project root), and optionally `app/routes.ts`, `app/root.tsx` and the files they reference. Dependencies must include `react`, `react-dom` and `react-router`. Wrangler configuration, Dockerfile, compose file, Vite configuration, `index.html`, the browser entry and the server's route tables are generated under the git-ignored `.chromatis/`.
 
 ### Configuration
 
@@ -127,20 +127,22 @@ restore(); // injections nest; without injection config is empty and app describ
 
 ### Routes and root
 
-A product declares routes as data (`routes` of `defineModule`, and `createManifest(..., { root, routes })` for the package itself):
+A product declares routes as data (`routes` of `defineModule`, and `createManifest(..., { root, server, document, public, routes })` for the package itself):
 
 ```ts
 type RouteDeclaration = {
   path?: string; // a route
   index?: true; // an index route
   layout?: true; // a pathless layout (with children)
+  api?: true; // with path: an API endpoint; the file exports GET, POST, …
   id?: string; // default "routes/<file name>"; needed when a file serves two routes
   file: string; // package-exported specifier, or "./…" relative to the module directory (manifest: to the manifest file)
+  server?: string; // the page's server file: loader and action
   children?: RouteDeclaration[];
 };
 ```
 
-Exactly one of `path`, `index`, `layout` is set. Chromatis writes `.chromatis/app/` (`root.tsx`, `routes.ts`, one re-export per route with the export names read from the route file) and points React Router's `appDirectory` at it. An instance may add routes in `app/routes.ts` (a default-exported `RouteConfig`, files relative to its `app/`; they are appended after the product's) and may replace the root with `app/root.tsx`. To replace a product route, list its URL path under `[routes] omit`.
+Exactly one of `path`, `index`, `layout` is set. Pages render in the browser; the browser router fetches every server loader of a navigation in one request to `/_chromatis/data<path>` (`@chromatis/base/data`, `@chromatis/base/client`). Chromatis writes `.chromatis/app/index.html` from `app.document`, the browser entry `.chromatis/app/main.tsx`, and the server's tables `.chromatis/build/routes.ts`. `app.public` (relative to the manifest) is the product's static directory, copied into the client build below the instance's own `public/`. An instance may add routes in `app/routes.ts` (a default-exported `RouteDeclaration[]` with `./` files relative to its `app/`; they are appended after the product's) and may replace the root with `app/root.tsx` and `app/root.server.ts`. To replace a product route, list its URL path under `[routes] omit`.
 
 ## Commands
 
@@ -153,7 +155,7 @@ Exactly one of `path`, `index`, `layout` is set. Chromatis writes `.chromatis/ap
 | `inspect [--json] [--env e]`                  | Prints modules, disabled modules with the reason, effective configuration (credential-looking values redacted), root and routes, contributions, artifacts, secrets and unmet requirements.                                                                                                                                                  |
 | `doctor [--json] [--offline] [--target t]`    | `inspect` plus the deployment preflight.                                                                                                                                                                                                                                                                                                    |
 | `build [--target t]`                          | Validate configuration, run contributions, validate artifacts, embed them, build the application, run the static preflight.                                                                                                                                                                                                                 |
-| `dev`                                         | The same preparation, then the React Router dev server.                                                                                                                                                                                                                                                                                     |
+| `dev`                                         | The same preparation, then the Vite dev server, which also answers data and API requests.                                                                                                                                                                                                                                                   |
 | `deploy [--target t] [--dry-run] [--offline]` | Instance `check`, contributions and artifacts, preflight, build, post-build preflight, database migrations, secret upload, deployment, smoke test. `--dry-run` stops before anything is migrated, uploaded or deployed; `--offline` limits the preflight to what needs no secrets or network.                                               |
 | `secret`                                      | The secrets menu.                                                                                                                                                                                                                                                                                                                           |
 | `init`                                        | Writes the root stubs, `.gitignore` entries and everything generated under `.chromatis/`, including the editor schemas in `.chromatis/schemas/`. Run it after a fresh clone.                                                                                                                                                                |
@@ -163,7 +165,7 @@ Exactly one of `path`, `index`, `layout` is set. Chromatis writes `.chromatis/ap
 
 **Build lifecycle.** Contributions run in contribution-id order, each into a fresh `.chromatis/artifacts/<id>/`, called as `(await import(module))[export ?? "default"]({ instanceRoot, outDir, environment, config })` where `config` holds the validated module configs by module name; the first failure aborts with the contribution id. An artifact is valid when `.chromatis/artifacts/<path>` exists and its validator `(dir) => { ok: true } | { ok: false; errors: string[] }` accepts it; errors of all artifacts are listed together. The validated directories are embedded as `chromatis-artifacts`; a digest recorded at embedding time lets `doctor` detect a build that no longer matches the artifact.
 
-**Check gates.** For `typecheck`, `lint`, `format:check` and `test` an instance's own `package.json` script of that name runs if it exists. Otherwise Chromatis runs a default for `typecheck` (`react-router typegen`, `tsc --noEmit`), `lint` (`eslint . --max-warnings 0`) and `format:check` (`prettier` on `app`, `src`, `server`, `package.json`), skipped when the tool is not installed; `test` has no default. `CHROMATIS_CHECK_ACTIVE` stops a script that calls `chromatis check` from recursing.
+**Check gates.** For `typecheck`, `lint`, `format:check` and `test` an instance's own `package.json` script of that name runs if it exists. Otherwise Chromatis runs a default for `typecheck` (`tsc --noEmit`), `lint` (`eslint . --max-warnings 0`) and `format:check` (`prettier` on `app`, `src`, `server`, `package.json`), skipped when the tool is not installed; `test` has no default. `CHROMATIS_CHECK_ACTIVE` stops a script that calls `chromatis check` from recursing.
 
 **Preflight** lists every failure at once: tooling files; valid artifacts that match what was embedded; the server hook loads and its definitions match the declared runtime kinds; the runtime-migration ledger; static database and security checks and a database connection when a module uses PostgreSQL; every secret required for the environment; an example or `localhost` domain on Cloudflare; Wrangler and Cloudflare credentials, or Docker. See the deployment documentation in the private planning repository.
 

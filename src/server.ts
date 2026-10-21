@@ -1,6 +1,4 @@
 import { DEV_OPEN_VARIABLE } from "./dev.js";
-import type { ServerBuild } from "react-router";
-import { createRequestHandler } from "react-router";
 import { createBunRuntimeHost } from "./stateful/bun.js";
 import {
   createCloudflareRuntimeHost,
@@ -9,6 +7,24 @@ import {
 import type { RuntimeDefinition, StatefulRuntime } from "./stateful.js";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
+import { withRequestScope } from "./request-scope.js";
+import { handleApi, type ApiTable } from "./api.js";
+import { handleData, type DataTable } from "./data.js";
+
+/** The generated route tables (`.chromatis/build/routes.ts`). */
+export type ServerRoutes = Readonly<{ api: ApiTable; data: DataTable }>;
+
+/** Data and API requests, inside a request scope; undefined for anything else. */
+export function serveRoutes(
+  routes: ServerRoutes,
+  request: Request,
+): Promise<Response | undefined> {
+  return withRequestScope(
+    async () =>
+      (await handleData(routes.data, request)) ??
+      (await handleApi(routes.api, request)),
+  );
+}
 
 export interface ServerHook<Service = unknown> {
   readonly definitions: readonly RuntimeDefinition[];
@@ -22,11 +38,10 @@ export interface ServerHook<Service = unknown> {
 }
 
 export function createFrameworkWorker<Service>(
-  build: ServerBuild,
+  routes: ServerRoutes,
   hook: ServerHook<Service> | undefined,
   bindings: Readonly<Record<string, string>>,
 ) {
-  const handle = createRequestHandler(build, "production");
   return {
     async fetch(
       request: Request,
@@ -67,7 +82,11 @@ export function createFrameworkWorker<Service>(
         "x-chromatis-client",
         request.headers.get("cf-connecting-ip") ?? "local",
       );
-      return handle(new Request(request, { headers }));
+      // Static files and pages never get here (see `run_worker_first`).
+      return (
+        (await serveRoutes(routes, new Request(request, { headers }))) ??
+        new Response(null, { status: 404 })
+      );
     },
   };
 }
@@ -109,13 +128,10 @@ function staticFile(root: string, pathname: string): Response | undefined {
 }
 
 export async function startFrameworkBun<Service>(
+  routes: ServerRoutes,
   hook?: ServerHook<Service>,
 ): Promise<void> {
   const root = process.cwd();
-  const build = (await import(
-    path.join(root, "build/server/index.js")
-  )) as ServerBuild;
-  const handle = createRequestHandler(build, "production");
   const host = createBunRuntimeHost(hook?.definitions ?? []);
   // A deployed server is never a `--open` development server.
   delete process.env[DEV_OPEN_VARIABLE];
@@ -153,7 +169,22 @@ export async function startFrameworkBun<Service>(
         "x-chromatis-client",
         process.env.TRUST_PROXY === "1" && forwarded ? forwarded : address,
       );
-      return handle(new Request(request, { headers }));
+      const answer = await serveRoutes(
+        routes,
+        new Request(request, { headers }),
+      );
+      if (answer) {
+        return answer;
+      }
+      // Every other GET is a page: the browser app routes it.
+      return request.method === "GET" || request.method === "HEAD"
+        ? new Response(Bun.file(path.join(clientRoot, "index.html")), {
+            headers: {
+              "Content-Type": "text/html; charset=utf-8",
+              "Cache-Control": "no-cache",
+            },
+          })
+        : new Response(null, { status: 404 });
     },
     websocket: host.websocket as never,
   });

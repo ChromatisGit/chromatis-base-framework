@@ -50,10 +50,7 @@ export function formatTargets(root: string): string[] {
  */
 function defaultCommands(root: string, name: string): string[][] {
   const commands: Record<string, string[][]> = {
-    typecheck: [
-      ["react-router", "typegen"],
-      ["tsc", "--noEmit"],
-    ],
+    typecheck: [["tsc", "--noEmit"]],
     lint: [["eslint", ".", "--max-warnings", "0"]],
     "format:check": [["prettier", ...formatTargets(root), "--check"]],
   };

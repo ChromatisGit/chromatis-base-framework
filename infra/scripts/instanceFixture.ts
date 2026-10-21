@@ -13,7 +13,6 @@ import {
   serializeManifest,
   type ChromatisManifest,
   type ModuleDeclaration,
-  type RouteDeclaration,
 } from "../../src/module.js";
 import {
   applyDirectives,
@@ -56,7 +55,7 @@ export type FixtureOptions = Readonly<{
   /** Link `@chromatis/base` to this checkout (needed to run a real build). */
   linkChromatis?: boolean;
   /** Application-level root and routes of the product package (manifest `app`). */
-  app?: { root?: string; routes?: readonly RouteDeclaration[] };
+  app?: Parameters<typeof createManifest>[1];
   /** Extra files in the product package, relative to its root. */
   packageFiles?: Readonly<Record<string, string>>;
   /** Extra instance files, relative to the instance root. */

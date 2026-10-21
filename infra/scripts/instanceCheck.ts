@@ -1,4 +1,3 @@
-import { extraRouteProblems, loadExtraRoutes } from "./routes.js";
 import { checkArtifacts } from "./artifacts.js";
 import { editorSchemaProblems, planEditorSchemas } from "./editorSchemas.js";
 import type { ConfigEnvironment } from "../../src/config.js";
@@ -50,26 +49,6 @@ const artifactsStage: CheckStage = {
 };
 
 /**
- * Route files exist (resolved with the instance), ids and paths are unique, and
- * the instance's own `app/routes.ts` does not collide with the product's.
- * Package-level problems are part of the instance stage; this one executes the
- * instance's route config.
- */
-const routesStage: CheckStage = {
-  name: "routes",
-  run: async ({ root, instance }) => {
-    if (instance.problems.length > 0) {
-      return [];
-    }
-    const extra = await loadExtraRoutes(root);
-    return [
-      ...extra.problems,
-      ...(extra.routes ? extraRouteProblems(instance.shell, extra.routes) : []),
-    ];
-  },
-};
-
-/**
  * Editor support: the generated schemas are current and every hand-written
  * TOML file names its schema (see editorSchemas.ts). Fixed by `chromatis fix`.
  */
@@ -94,7 +73,6 @@ export const checkStages: readonly CheckStage[] = [
   toolingStage,
   instanceStage,
   artifactsStage,
-  routesStage,
   editorStage,
   scriptsStage,
 ];

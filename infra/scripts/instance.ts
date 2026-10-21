@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { type ConfigEnvironment } from "../../src/config.js";
-import { INSTANCE_ROOT_FILE, resolveShell } from "./routes.js";
+import { loadExtraRoutes, resolveShell } from "./routes.js";
 import { buildPlan } from "./buildPlan.js";
 import { appConfigSchema, publicUrl, type AppConfig } from "./appConfig.js";
 import {
@@ -82,20 +82,39 @@ function instanceName(root: string, configured: string | undefined) {
   return { name };
 }
 
-const EMPTY_SHELL: ResolvedShell = { root: undefined, routes: [], omitted: [] };
+const EMPTY_SHELL: ResolvedShell = {
+  root: undefined,
+  rootServer: undefined,
+  rootSource: "none",
+  document: undefined,
+  publicDirectory: undefined,
+  routes: [],
+  omitted: [],
+};
 
-/** A product with routes needs a root, from the package or the instance. */
-function rootProblems(shell: ResolvedShell, root: string): Problem[] {
-  return shell.routes.length > 0 &&
-    !shell.root &&
-    !existsSync(path.join(root, INSTANCE_ROOT_FILE))
-    ? [
-        {
-          source: "root",
-          message: `the product declares routes but no root; add ${INSTANCE_ROOT_FILE} or declare app.root in the manifest`,
-        },
-      ]
-    : [];
+/** Pages need a root, from the package or the instance, and a document. */
+function rootProblems(shell: ResolvedShell): Problem[] {
+  const pages = shell.routes.some((route) => route.kind !== "api");
+  return [
+    ...(pages && !shell.root
+      ? [
+          {
+            source: "root",
+            message:
+              "the product declares pages but no root; add app/root.tsx or declare app.root in the manifest",
+          },
+        ]
+      : []),
+    ...(pages && !shell.document
+      ? [
+          {
+            source: "root",
+            message:
+              "the product declares pages but no document; declare app.document in the manifest",
+          },
+        ]
+      : []),
+  ];
 }
 
 function unknownDisabled(
@@ -174,15 +193,17 @@ export async function loadInstance(
     ...unknownDisabled(requested, known, discovery),
     ...validateModuleSet(loaded, root),
   );
+  const extra = await loadExtraRoutes(root);
   const { shell, problems: shellProblems } = discovery
     ? resolveShell({
         discovery,
         modules: loaded,
         omit: appConfig?.routes.omit ?? [],
         root,
+        extraRoutes: extra.routes,
       })
     : { shell: EMPTY_SHELL, problems: [] };
-  problems.push(...shellProblems, ...rootProblems(shell, root));
+  problems.push(...extra.problems, ...shellProblems, ...rootProblems(shell));
   const modules: InstanceModule[] = loaded.map((module) => ({
     module,
     config: module.declaration.config

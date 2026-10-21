@@ -152,6 +152,7 @@ describe("build context", () => {
       serverHook: path.join(packageRoot, "modules/solo/hook.ts"),
       bundledPackages: ["@product/app"],
       allowedRoots: [packageRoot],
+      productPublic: null,
     });
     const worker = readFileSync(
       path.join(root, ".chromatis/build/worker.ts"),

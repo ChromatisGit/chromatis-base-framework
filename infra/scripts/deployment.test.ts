@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -37,7 +38,15 @@ function application(
     secrets: [],
     optionalSecrets: [],
     declaredSecrets: [],
-    shell: { root: undefined, routes: [], omitted: [] },
+    shell: {
+      root: undefined,
+      rootServer: undefined,
+      rootSource: "none",
+      document: undefined,
+      publicDirectory: undefined,
+      routes: [],
+      omitted: [],
+    },
     contributions: [],
     artifacts: [],
     moduleConfigs: {},
@@ -68,14 +77,43 @@ test("canonical tooling accepts pristine stubs and rejects either modified stub"
   }
 });
 
+test("init removes what React Router's framework mode left behind", () => {
+  const root = project();
+  mkdirSync(path.join(root, ".react-router/types"), { recursive: true });
+  writeFileSync(
+    path.join(root, "react-router.config.ts"),
+    'export default { ssr: true, appDirectory: ".chromatis/app" };\n',
+  );
+  expect(checkTooling(root).slice(0, 2)).toEqual([
+    ".react-router is left over from React Router's framework mode; run chromatis init",
+    "react-router.config.ts is left over from React Router's framework mode; run chromatis init",
+  ]);
+  repairTooling(root);
+  expect(checkTooling(root)).toEqual([]);
+  expect(existsSync(path.join(root, ".react-router"))).toBe(false);
+  expect(existsSync(path.join(root, "react-router.config.ts"))).toBe(false);
+  // A config the instance wrote itself is left alone.
+  writeFileSync(
+    path.join(root, "react-router.config.ts"),
+    "export default {};\n",
+  );
+  repairTooling(root);
+  expect(existsSync(path.join(root, "react-router.config.ts"))).toBe(true);
+});
+
 test("runtime migrations append new tags without changing earlier entries", () => {
   const root = project();
   const first = migrationPlan(root, ["classroom"], true);
-  expect(first).toEqual([{ tag: "v1", new_classes: ["Runtime_classroom"] }]);
+  expect(first).toEqual([
+    { tag: "v1", new_sqlite_classes: ["Runtime_classroom"] },
+  ]);
   expect(migrationPlan(root, ["classroom"], true)).toEqual(first);
   const second = migrationPlan(root, ["classroom", "quiz"], true);
   expect(second[0]).toEqual(first[0]);
-  expect(second[1]).toEqual({ tag: "v2", new_classes: ["Runtime_quiz"] });
+  expect(second[1]).toEqual({
+    tag: "v2",
+    new_sqlite_classes: ["Runtime_quiz"],
+  });
   const third = migrationPlan(root, ["quiz"], true);
   expect(third.slice(0, 2)).toEqual(second);
   expect(third[2]).toEqual({
@@ -128,7 +166,9 @@ test("fake secret values stay out of generated Worker and deployment files", () 
       artifacts.wranglerPath,
       path.join(artifacts.output, "worker.ts"),
       path.join(artifacts.output, "bun.ts"),
-      path.join(root, "react-router.config.ts"),
+      path.join(root, ".chromatis/app/index.html"),
+      path.join(root, ".chromatis/app/main.tsx"),
+      path.join(root, ".chromatis/build/routes.ts"),
     ];
     for (const file of files) {
       expect(readFileSync(file, "utf8")).not.toContain("SENTINEL_SECRET_VALUE");
