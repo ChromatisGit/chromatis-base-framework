@@ -149,7 +149,9 @@ describe("product routes", () => {
     );
     expect(existsSync(path.join(root, "react-router.config.ts"))).toBe(false);
   });
+});
 
+describe("product manifest", () => {
   test("the product's static directory resolves next to the manifest", async () => {
     const { root } = await createInstance({
       ...productPackage,
