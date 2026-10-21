@@ -181,6 +181,8 @@
    they inherit safely into remapped surfaces). Keep a visible hierarchy:
    muted text clearly quieter than body text (≥ 4.5:1), subtle borders for
    structural grouping, control borders strong enough for 3:1.
+   A subtree pinned to one color mode (data-theme="light" or "dark" below
+   the root) gets its primitives from the theme and is recalculated here.
    ===================================================================== */
 :root {
   --mix-text-muted: 70%;
@@ -188,6 +190,7 @@
   --mix-border-control: 55%;
 }
 :root,
+[data-theme],
 .surface-emphasis,
 .surface-accent,
 [data-surface="accent"],
