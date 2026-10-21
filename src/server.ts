@@ -9,6 +9,7 @@ import {
 import type { RuntimeDefinition, StatefulRuntime } from "./stateful.js";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
+import { withRequestScope } from "./request-scope.js";
 
 export interface ServerHook<Service = unknown> {
   readonly definitions: readonly RuntimeDefinition[];
@@ -67,7 +68,7 @@ export function createFrameworkWorker<Service>(
         "x-chromatis-client",
         request.headers.get("cf-connecting-ip") ?? "local",
       );
-      return handle(new Request(request, { headers }));
+      return withRequestScope(() => handle(new Request(request, { headers })));
     },
   };
 }
@@ -153,7 +154,7 @@ export async function startFrameworkBun<Service>(
         "x-chromatis-client",
         process.env.TRUST_PROXY === "1" && forwarded ? forwarded : address,
       );
-      return handle(new Request(request, { headers }));
+      return withRequestScope(() => handle(new Request(request, { headers })));
     },
     websocket: host.websocket as never,
   });

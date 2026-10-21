@@ -81,9 +81,13 @@ export const generatedTypes = readFileSync(
 /** Where Chromatis generates React Router's app directory (git-ignored). */
 export const APP_DIRECTORY = ".chromatis/app";
 
+// `routeDiscovery: initial` sends the whole route manifest with the first
+// page, so no request spends CPU matching routes for a partial one (Workers
+// Free allows 10 ms per request).
 export const generatedRouterConfig = `export default {
   ssr: true,
   appDirectory: ${JSON.stringify(APP_DIRECTORY)},
+  routeDiscovery: { mode: "initial" },
   future: {
     v8_middleware: true,
     v8_splitRouteModules: true,

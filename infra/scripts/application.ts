@@ -38,7 +38,9 @@ export async function loadHook(
 
 type Migration = {
   tag: string;
+  /** Legacy key from before Workers Free; read but never written. */
   new_classes?: string[];
+  new_sqlite_classes?: string[];
   deleted_classes?: string[];
 };
 type Ledger = { migrations: Migration[] };
@@ -66,7 +68,10 @@ export function migrationPlan(
         `Runtime migration tags are inconsistent; restore ${LEDGER_FILE} from Git and run chromatis build`,
       );
     }
-    for (const name of migration.new_classes ?? []) {
+    for (const name of [
+      ...(migration.new_classes ?? []),
+      ...(migration.new_sqlite_classes ?? []),
+    ]) {
       if (current.has(name)) {
         throw new Error(
           `Runtime migration ${migration.tag} adds ${name} twice; restore the ledger from Git and run chromatis build`,
@@ -89,7 +94,8 @@ export function migrationPlan(
   if (added.length || deleted.length) {
     ledger.migrations.push({
       tag: `v${ledger.migrations.length + 1}`,
-      ...(added.length ? { new_classes: added } : {}),
+      // The Workers Free plan only accepts SQLite-backed Durable Objects.
+      ...(added.length ? { new_sqlite_classes: added } : {}),
       ...(deleted.length ? { deleted_classes: deleted } : {}),
     });
     if (persist) {

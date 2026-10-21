@@ -32,6 +32,7 @@
     "./log": "./src/log.ts",
     "./module": "./src/module.ts",
     "./request-boundary": "./src/request-boundary.ts",
+    "./request-scope": "./src/request-scope.ts",
     "./runtime": "./src/runtime.ts",
     "./secrets": "./src/secrets.ts",
     "./stateful": "./src/stateful.ts",

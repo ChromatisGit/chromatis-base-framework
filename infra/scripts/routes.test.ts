@@ -107,6 +107,7 @@ describe("product routes", () => {
       `export default {
   ssr: true,
   appDirectory: ".chromatis/app",
+  routeDiscovery: { mode: "initial" },
   future: {
     v8_middleware: true,
     v8_splitRouteModules: true,

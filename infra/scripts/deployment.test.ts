@@ -71,11 +71,11 @@ test("canonical tooling accepts pristine stubs and rejects either modified stub"
 test("runtime migrations append new tags without changing earlier entries", () => {
   const root = project();
   const first = migrationPlan(root, ["classroom"], true);
-  expect(first).toEqual([{ tag: "v1", new_classes: ["Runtime_classroom"] }]);
+  expect(first).toEqual([{ tag: "v1", new_sqlite_classes: ["Runtime_classroom"] }]);
   expect(migrationPlan(root, ["classroom"], true)).toEqual(first);
   const second = migrationPlan(root, ["classroom", "quiz"], true);
   expect(second[0]).toEqual(first[0]);
-  expect(second[1]).toEqual({ tag: "v2", new_classes: ["Runtime_quiz"] });
+  expect(second[1]).toEqual({ tag: "v2", new_sqlite_classes: ["Runtime_quiz"] });
   const third = migrationPlan(root, ["quiz"], true);
   expect(third.slice(0, 2)).toEqual(second);
   expect(third[2]).toEqual({
