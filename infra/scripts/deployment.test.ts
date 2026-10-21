@@ -84,7 +84,12 @@ test("init removes what React Router's framework mode left behind", () => {
     path.join(root, "react-router.config.ts"),
     'export default { ssr: true, appDirectory: ".chromatis/app" };\n',
   );
+  expect(checkTooling(root).slice(0, 2)).toEqual([
+    ".react-router is left over from React Router's framework mode; run chromatis init",
+    "react-router.config.ts is left over from React Router's framework mode; run chromatis init",
+  ]);
   repairTooling(root);
+  expect(checkTooling(root)).toEqual([]);
   expect(existsSync(path.join(root, ".react-router"))).toBe(false);
   expect(existsSync(path.join(root, "react-router.config.ts"))).toBe(false);
   // A config the instance wrote itself is left alone.

@@ -90,8 +90,26 @@ export function generatedTooling(): Readonly<Record<string, string>> {
   };
 }
 
+/**
+ * What earlier versions generated for React Router's framework mode. Left in
+ * place, its stale route types break the instance's lint and typecheck.
+ */
+function routerLeftovers(root: string): string[] {
+  const config = path.join(root, "react-router.config.ts");
+  return [
+    ...(existsSync(path.join(root, ".react-router")) ? [".react-router"] : []),
+    ...(existsSync(config) &&
+    readFileSync(config, "utf8").includes('appDirectory: ".chromatis/app"')
+      ? ["react-router.config.ts"]
+      : []),
+  ];
+}
+
 export function checkTooling(root = process.cwd()): string[] {
-  const problems: string[] = [];
+  const problems: string[] = routerLeftovers(root).map(
+    (file) =>
+      `${file} is left over from React Router's framework mode; run chromatis init`,
+  );
   for (const [file, expected] of [
     ...Object.entries(expectedTooling()),
     ...Object.entries(generatedTooling()),
@@ -116,23 +134,10 @@ export function writeGeneratedTooling(root: string): void {
   }
 }
 
-/**
- * What earlier versions generated for React Router's framework mode. Left in
- * place, its stale route types break the instance's lint and typecheck.
- */
-function removeRouterLeftovers(root: string): void {
-  rmSync(path.join(root, ".react-router"), { recursive: true, force: true });
-  const config = path.join(root, "react-router.config.ts");
-  if (
-    existsSync(config) &&
-    readFileSync(config, "utf8").includes('appDirectory: ".chromatis/app"')
-  ) {
-    rmSync(config);
-  }
-}
-
 export function repairTooling(root = process.cwd()): void {
-  removeRouterLeftovers(root);
+  for (const file of routerLeftovers(root)) {
+    rmSync(path.join(root, file), { recursive: true, force: true });
+  }
   for (const [file, expected] of Object.entries(expectedTooling())) {
     writeFileSync(path.join(root, file), expected);
   }
