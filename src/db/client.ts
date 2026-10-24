@@ -26,8 +26,8 @@ export interface DatabaseOptions {
   readonly environment: DatabaseEnvironment;
   readonly migrationConnectionString?: string;
   /**
-   * Upper bound of connections in the Bun pool (default `DEFAULT_POOL_SIZE`,
-   * 5). The Cloudflare runtime ignores it.
+   * Upper bound of connections in the Bun pool (default `DATABASE_POOL_SIZE`
+   * from the environment, else 5). The Cloudflare runtime ignores it.
    */
   readonly poolSize?: number;
 }

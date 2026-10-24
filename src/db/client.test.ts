@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createDatabase } from "./client.js";
+import { DEFAULT_POOL_SIZE, configuredPoolSize } from "./client.node.js";
 
 const runtimeUrl =
   "postgres://chromatis_runtime:runtime@127.0.0.1:5432/chromatis";
@@ -65,5 +66,11 @@ describe("pool size", () => {
         poolSize,
       }),
     ).toThrow("pool size must be a positive integer");
+  });
+
+  test("the deployment chooses it with DATABASE_POOL_SIZE", () => {
+    expect(configuredPoolSize({})).toBe(DEFAULT_POOL_SIZE);
+    expect(configuredPoolSize({ DATABASE_POOL_SIZE: "8" })).toBe(8);
+    expect(configuredPoolSize({ DATABASE_POOL_SIZE: "many" })).toBeNaN();
   });
 });

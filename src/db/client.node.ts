@@ -24,6 +24,12 @@ import type {
  */
 export const DEFAULT_POOL_SIZE = 5;
 
+/** `DATABASE_POOL_SIZE` from the deployment, else the default. */
+export const configuredPoolSize = (
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): number =>
+  env.DATABASE_POOL_SIZE ? Number(env.DATABASE_POOL_SIZE) : DEFAULT_POOL_SIZE;
+
 const localPools = new Map<string, ReturnType<typeof postgres>>();
 
 export async function closeNodeDatabasePools(): Promise<void> {
@@ -95,7 +101,7 @@ export function createNodeAdapter(
   connectionString: string,
   migrationConnectionString?: string,
   role: string = DATABASE_RUNTIME_ROLE,
-  poolSize: number = DEFAULT_POOL_SIZE,
+  poolSize: number = configuredPoolSize(),
 ): DbAdapter {
   const pool = getPool(connectionString, poolSize);
   let runtimeRoleCheck: Promise<void> | undefined;
