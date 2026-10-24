@@ -273,6 +273,28 @@ describe("PostgreSQL database contract", () => {
   });
 });
 
+describe("PostgreSQL prepared statements", () => {
+  test("application SQL and the RLS context run as prepared statements", async () => {
+    const database = createDatabase(runtimeUrl, {
+      runtime: "bun",
+      environment: "local",
+      migrationConnectionString: migrationUrl,
+    });
+    const prepared = await database.userTransaction(
+      { id: userA },
+      async (sql) => {
+        await sql`SELECT id FROM courses WHERE title = ${"probe"}`;
+        return sql<Array<{ statement: string }>>`
+          SELECT statement FROM pg_prepared_statements
+        `;
+      },
+    );
+    const statements = prepared.map((row) => row.statement);
+    expect(statements).toContain("SELECT id FROM courses WHERE title = $1");
+    expect(statements).toContain("SELECT set_config('app.user_id', $1, true)");
+  });
+});
+
 describe("SQL injection payloads stay values", () => {
   test("payloads cannot alter app.user_id or reach another User's rows", async () => {
     const database = createDatabase(runtimeUrl, {

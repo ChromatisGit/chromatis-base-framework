@@ -54,14 +54,22 @@ async function setRlsContext(
   tx: postgres.TransactionSql,
   userId: string,
 ): Promise<void> {
-  await tx.unsafe("SELECT set_config('app.user_id', $1, true)", [userId]);
+  await tx.unsafe("SELECT set_config('app.user_id', $1, true)", [userId], {
+    prepare: true,
+  });
 }
 
+/**
+ * The SQL tag produces fixed query texts with bound parameters, so they are
+ * prepared once per connection and reused (postgres.js leaves `unsafe`
+ * unprepared unless asked). Setup and migration SQL stays unprepared.
+ */
 function makeTxSql(tx: postgres.TransactionSql): DbSql {
   return createSqlTag(async (query) => {
     const rows = await tx.unsafe(
       query.text,
       query.values as postgres.ParameterOrJSON<never>[],
+      { prepare: true },
     );
     return rows as unknown[];
   });
