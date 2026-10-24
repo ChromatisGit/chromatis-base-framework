@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync } from "node:fs";
+import { cpSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { generateArtifacts, frameworkRoot } from "./application.js";
 import { embedArtifacts, prepareArtifacts } from "./artifacts.js";
@@ -12,6 +12,14 @@ import {
 } from "./cloudflare.js";
 import { bundleForBun } from "./virtualModules.js";
 import { writeDockerArtifacts } from "./dockerArtifacts.js";
+import {
+  deploymentSecrets,
+  exportMount,
+  imageSmokeTest,
+  startDeployment,
+  writeDeployBundle,
+  writeImageContext,
+} from "./imageDeployment.js";
 import { renderReport, runInstanceCommand } from "./instanceCommands.js";
 import { inspectInstance } from "./instanceInspect.js";
 import { formatProblem } from "./problems.js";
@@ -20,6 +28,7 @@ import { commandEnvironment, targetOption } from "./commandOptions.js";
 import { resolveApplication, instanceMode } from "./instance.js";
 import { preflight } from "./preflight.js";
 import { prerenderPages } from "./prerender.js";
+import { flattenRoutes } from "./routes.js";
 import type {
   BuildTarget,
   ResolvedApplication,
@@ -43,9 +52,10 @@ function run(
   command: string,
   args: string[],
   env: NodeJS.ProcessEnv = process.env,
+  cwd = root,
 ): void {
   const child = spawnSync(command, args, {
-    cwd: root,
+    cwd,
     env,
     stdio: "inherit",
     shell: false,
@@ -65,26 +75,41 @@ function assertReady(failures: readonly string[]): void {
 
 /**
  * Lifecycle after config validation: run contributions, validate artifacts,
- * embed exactly those directories, then build the app for `target`.
+ * embed exactly those directories, then build the app for `target`. A mounted
+ * image embeds no artifacts (it reads them at startup); an instance that runs
+ * on an image builds no server and exports its mount instead.
  */
 async function buildApp(
   app: ResolvedApplication,
   target: BuildTarget,
   prepared = false,
 ) {
-  if (!prepared) {
+  if (
+    app.mounted &&
+    flattenRoutes(app.shell.routes).some((route) => route.prerender)
+  ) {
+    throw new Error(
+      "a mounted image prerenders no pages: they would need the mount at build time; prerendered pages belong to the instances that run on it",
+    );
+  }
+  if (!prepared && !app.mounted) {
     await prepareArtifacts(root, app);
   }
   generateArtifacts(root, app);
-  embedArtifacts(root, app);
+  if (!app.mounted) {
+    embedArtifacts(root, app);
+  }
   run(
     "bun",
     ["x", "vite", "build", "--config", path.join(frameworkRoot, "src/vite.js")],
     { ...process.env, CHROMATIS_BUILD_TARGET: target },
   );
-  prerenderPages(root, app, frameworkRoot);
-  if (target === "docker") {
+  const pages = prerenderPages(root, app, frameworkRoot);
+  if (app.image) {
+    exportMount(root, app, pages);
+  } else if (target === "docker") {
     const image = path.join(root, ".chromatis/image");
+    rmSync(image, { recursive: true, force: true });
     mkdirSync(image, { recursive: true });
     await bundleForBun(
       root,
@@ -95,6 +120,9 @@ async function buildApp(
       recursive: true,
       force: true,
     });
+    if (app.mounted) {
+      await writeImageContext(root, app, image);
+    }
   }
   return generateArtifacts(root, app);
 }
@@ -145,6 +173,10 @@ async function deploy(
     }),
   );
   printPlan(app, target, dryRun, artifacts);
+  if (app.image) {
+    await deployImage(app, dryRun);
+    return;
+  }
   if (dryRun) {
     if (target === "docker") {
       writeDockerArtifacts(root, app, {}, artifacts.output);
@@ -213,6 +245,33 @@ async function deploy(
 }
 
 /**
+ * An instance on an image: the compose project with the mount goes to the
+ * server (or starts here); its `migrate` service applies the migrations.
+ */
+async function deployImage(
+  app: ResolvedApplication,
+  dryRun: boolean,
+): Promise<void> {
+  if (dryRun) {
+    writeDeployBundle(root, app, {});
+    return;
+  }
+  const service = applicationService(app.name, app.environment);
+  const values = await requiredSecrets(deploymentSecrets(app), service);
+  for (const name of app.optionalSecrets) {
+    const value = await defaultSecretLookup(service, name);
+    if (value) {
+      values[name] = value;
+    }
+  }
+  const bundle = writeDeployBundle(root, app, values);
+  startDeployment(bundle, app, (command, args, cwd) =>
+    run(command, args, process.env, cwd),
+  );
+  await imageSmokeTest(app);
+}
+
+/**
  * Prints the instance diagnostics, then runs the deployment preflight. Invalid
  * configuration is reported with the diagnostics instead of aborting early.
  */
@@ -254,6 +313,11 @@ async function applicationCommand(
   if (command === "build") {
     await build(app, target);
   } else if (command === "deploy") {
+    if (app.mounted) {
+      throw new Error(
+        "a mounted image is built with chromatis build and released as an image; deploy the instances that run on it",
+      );
+    }
     await deploy(
       app,
       target,

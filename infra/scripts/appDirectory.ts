@@ -128,6 +128,24 @@ void startApp(app);
 `;
 
 /**
+ * The browser entry of an instance that runs on an image: its pages are a
+ * static site in front of a server built elsewhere, so a link leaves the page
+ * as a document load instead of client-side routing into that server's routes.
+ */
+export const siteEntry = `${clientEntry}
+document.addEventListener(
+  "click",
+  (event) => {
+    const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
+    if (link instanceof HTMLAnchorElement && link.origin === location.origin) {
+      event.stopPropagation();
+    }
+  },
+  true,
+);
+`;
+
+/**
  * The server's tables: API endpoints in declaration order, and every route
  * with its full path and server file for the data endpoint.
  */
@@ -191,7 +209,10 @@ export function writeAppDirectory(
     documentHtml(app.shell.document),
   );
   writeFileSync(path.join(directory, APP_MODULE), appModule(app));
-  writeFileSync(path.join(directory, CLIENT_ENTRY), clientEntry);
+  writeFileSync(
+    path.join(directory, CLIENT_ENTRY),
+    app.image ? siteEntry : clientEntry,
+  );
   mkdirSync(path.dirname(path.join(root, SERVER_ROUTES_FILE)), {
     recursive: true,
   });

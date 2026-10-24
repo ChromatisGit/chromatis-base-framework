@@ -49,7 +49,61 @@ export function assertPlainData(value: unknown, where: string): void {
   throw new Error(`${where} is not plain JSON data`);
 }
 
+const mountedImport = JSON.stringify(
+  path.resolve(import.meta.dir, "../../src/mounted.ts"),
+);
+
+/** `chromatis-config` of a mounted image: read and validated at startup. */
+function mountedConfigText(app: ResolvedApplication): string {
+  return [
+    `import { loadMountedConfig, mountedOrExit } from ${mountedImport};`,
+    ...app.configModules.map(
+      (module, index) =>
+        `import module${index} from ${JSON.stringify(module.entryFile)};`,
+    ),
+    `export const { config, app } = mountedOrExit(() => loadMountedConfig(${JSON.stringify(app.name)}, [`,
+    ...app.configModules.map(
+      (module, index) =>
+        `  { name: ${JSON.stringify(module.name)}, declaration: module${index}, required: ${module.required} },`,
+    ),
+    "]));",
+    "",
+  ].join("\n");
+}
+
+/** `chromatis-artifacts` of a mounted image: read and validated at startup. */
+export function mountedArtifactsText(app: ResolvedApplication): string {
+  const validators = app.artifacts.map((artifact) => artifact.validator);
+  for (const validator of validators) {
+    if (validator && !validator.file) {
+      throw new Error(
+        `cannot resolve ${validator.specifier}: ${validator.error ?? "unknown"}`,
+      );
+    }
+  }
+  return [
+    `import { loadMountedArtifacts, mountedOrExit } from ${mountedImport};`,
+    ...validators.flatMap((validator, index) =>
+      validator
+        ? [
+            `import { ${validator.export} as validate${index} } from ${JSON.stringify(validator.file)};`,
+          ]
+        : [],
+    ),
+    "export const artifacts = await mountedOrExit(() => loadMountedArtifacts([",
+    ...app.artifacts.map(
+      (artifact, index) =>
+        `  { id: ${JSON.stringify(artifact.id)}, path: ${JSON.stringify(artifact.path)}${artifact.validator ? `, validate: validate${index}` : ""} },`,
+    ),
+    "]));",
+    "",
+  ].join("\n");
+}
+
 export function configModuleText(app: ResolvedApplication): string {
+  if (app.mounted) {
+    return mountedConfigText(app);
+  }
   const publicUrl = new URL(app.publicUrl);
   assertPlainData(app.moduleConfigs, "config");
   return [
@@ -73,6 +127,12 @@ export function writeConfigModule(
   const file = virtualFile(root, "chromatis-config");
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, configModuleText(app));
+  if (app.mounted) {
+    writeFileSync(
+      virtualFile(root, "chromatis-artifacts"),
+      mountedArtifactsText(app),
+    );
+  }
 }
 
 const EMPTY_ARTIFACTS = "export const artifacts = {};";

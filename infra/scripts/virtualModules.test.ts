@@ -106,3 +106,70 @@ describe("virtual modules", () => {
     expect(() => assertPlainData({ m: new Map() }, "config")).toThrow();
   });
 });
+
+describe("mounted image", () => {
+  test("a mounted image reads configuration and artifacts when it starts", async () => {
+    const { root } = await createInstance({
+      modules: { artifact: hookedModule },
+      config: {
+        "app.toml": `[deployment]\ntarget = "bun"\ndomain = "localhost"\ninstance = "mounted"\n`,
+      },
+    });
+    const app = await resolveApplication(root, "production");
+    expect(app.contributions).toEqual([]);
+    generateArtifacts(root, app);
+    const entry = path.join(root, ".chromatis/build/entry.ts");
+    await Bun.write(
+      entry,
+      `import hook from ${JSON.stringify(app.serverHook)};\nconsole.log(JSON.stringify((hook as any).createService({}, {})));\n`,
+    );
+    const outfile = path.join(root, ".chromatis/image/server.js");
+    await bundleForBun(root, entry, outfile);
+    const mount = path.join(root, "mount");
+    await Bun.write(
+      path.join(mount, "config/artifact.toml"),
+      'courses = ["geometry"]\n',
+    );
+    await Bun.write(
+      path.join(mount, "artifacts/catalog/catalog.meta.json"),
+      '{"courses":["geometry"]}',
+    );
+    await Bun.write(
+      path.join(mount, "artifacts/catalog/nested/data.json"),
+      "{}",
+    );
+    const start = (instance: string) =>
+      Bun.spawnSync(["bun", outfile], {
+        env: {
+          ...process.env,
+          CHROMATIS_INSTANCE: instance,
+          PUBLIC_URL: "https://school.example",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+    expect(JSON.parse(start(mount).stdout.toString())).toMatchObject({
+      courses: ["geometry"],
+      publicUrl: "https://school.example",
+      files: ["catalog.meta.json", "nested/data.json"],
+    });
+    const empty = start(path.join(root, "nothing"));
+    expect(empty.exitCode).toBe(1);
+    expect(empty.stderr.toString()).toContain(
+      "artifacts/catalog is missing (artifact catalog)",
+    );
+  });
+
+  test("a mounted image refuses module configuration of its own", async () => {
+    const { root } = await createInstance({
+      modules: { artifact: hookedModule },
+      config: {
+        "app.toml": `[deployment]\ntarget = "bun"\ndomain = "localhost"\ninstance = "mounted"\n`,
+        "artifact.toml": "",
+      },
+    });
+    await expect(resolveApplication(root, "production")).rejects.toThrow(
+      "a mounted image reads module configuration from the mount",
+    );
+  });
+});

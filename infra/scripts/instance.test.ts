@@ -44,6 +44,8 @@ describe("instance configuration", () => {
       target: "cloudflare",
       domain: "example.org",
       port: 3000,
+      instance: "built-in",
+      server: { path: "/srv/chromatis" },
     });
     expect(local.name).toBe("demo-instance");
   });

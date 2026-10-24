@@ -42,10 +42,14 @@ const instanceStage: CheckStage = {
  */
 const artifactsStage: CheckStage = {
   name: "artifacts",
-  run: ({ root, instance }) =>
-    instance.problems.length > 0
-      ? []
-      : checkArtifacts(root, applicationFrom(instance)),
+  run: ({ root, instance }) => {
+    if (instance.problems.length > 0) {
+      return [];
+    }
+    const app = applicationFrom(instance);
+    // A mounted image checks the artifacts of the mount when it starts.
+    return app.mounted ? [] : checkArtifacts(root, app);
+  },
 };
 
 /**

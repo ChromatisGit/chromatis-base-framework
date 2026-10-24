@@ -53,7 +53,64 @@ The Worker renders no pages. The generated assets configuration serves `index.ht
 
 ## Bun / Docker mechanics
 
-The server entry and the server's route tables are bundled with `Bun.build` into `.chromatis/image`, together with `build/client`, whose `index.html` the server returns for every page path; the image is built from the framework Dockerfile (`oven/bun`, runs as the `bun` user, exposes the configured port) by the generated `.chromatis/build/compose.json`. Embedded artifacts and configuration need no mounts. The compose service has a health check on `/_chromatis/health`, receives `PORT`, `PUBLIC_URL` and the secrets from `.chromatis/build/app.env` (mode 0600, git-ignored), and is started with `docker compose up --build -d`. The image contains no secret values.
+The server entry and the server's route tables are bundled with `Bun.build` into `.chromatis/image`, together with `build/client`, whose `index.html` the server returns for every page path; the image is built from the framework Dockerfile (`oven/bun`, runs as the `bun` user, exposes the configured port, health check on `/_chromatis/health`) by the generated `.chromatis/build/compose.json`. Embedded artifacts and configuration need no mounts. The compose service has a health check on `/_chromatis/health`, receives `PORT`, `PUBLIC_URL` and the secrets from `.chromatis/build/app.env` (mode 0600, git-ignored), and is started with `docker compose up --build -d`. The image contains no secret values.
+
+## One image for many instances
+
+A product can be released as **one Docker image** that many instances run, each with its own configuration, content and pages, and none with its own build. Two settings in `config/app.toml` make this work:
+
+```toml
+# The image itself (built by CI, never deployed by Chromatis):
+[deployment]
+target = "bun"
+domain = "localhost"     # unused; PUBLIC_URL decides at runtime
+instance = "mounted"
+```
+
+```toml
+# An instance that runs on it:
+[deployment]
+target = "bun"
+domain = "app.example.org"
+
+[deployment.image]
+name = "ghcr.io/org/app"
+tag = "1.4.0"
+
+[deployment.server]       # optional; without ssh the project starts here
+ssh = "deploy@host"
+path = "/srv/chromatis"   # the default
+backup = "u1@u1.your-storagebox.de:app"   # optional, see Backups
+```
+
+**The mounted image.** `chromatis build` bundles `server.js` and `migrate.js` into `.chromatis/image` with the client build and the product's `src/modules/*/{migrations,sql}`; `docker build -f infra/deploy/Dockerfile .chromatis/image` makes the image. Module configuration and artifacts are not embedded. At startup the server reads them from `CHROMATIS_INSTANCE` (default `/instance`):
+
+| Path                         | Read as                                                                              |
+| ---------------------------- | ------------------------------------------------------------------------------------ |
+| `config/<module>.toml`       | that module's configuration, validated with its schema (`production` overlays apply) |
+| `artifacts/<artifact path>/` | that artifact, checked with its validator                                            |
+| `site/`                      | not read by the app; Caddy serves it in front (below)                                |
+
+An invalid or missing part stops the server before it listens, with every finding. `PUBLIC_URL` gives the address. The image has no `config/<module>.toml` of its own, and prerenders no pages. The browser bundle never contains `chromatis-config` or `chromatis-artifacts`, in any build.
+
+**An instance on the image.** `chromatis build` runs its contributions, builds and prerenders its client as usual, and exports `.chromatis/mount/`: the config files of its modules, its artifacts and `site/`, which holds the prerendered pages and the client build's other files (assets, public files). Links on these pages load documents, so a visitor moves from the site into the app with a full page load. Its module set should match the image's (`[modules] disabled`), since the image decides which modules run.
+
+`chromatis deploy` then writes `.chromatis/deploy/`: the framework's compose project (`infra/deploy`), `.env` (image, domain, database passwords, backup target; mode 0600), `app.env` (the app's secrets) and the mount as `instance/`. Without `ssh` it runs `docker compose pull --policy missing && docker compose up -d` there; with `ssh` it copies the directory with `rsync` (keeping the server's `backups/`) and runs the same over SSH. The smoke test asks `https://<domain>/_chromatis/health` (`HTTPS_PORT` set: that port; `localhost`: Caddy's own certificate is accepted). An image deployment needs `POSTGRES_PASSWORD`, `DATABASE_OWNER_PASSWORD`, `DATABASE_AUTH_PASSWORD` and `DATABASE_RUNTIME_PASSWORD` (hex, 32+ characters: they go into URLs) instead of the `DATABASE_*_URL` secrets, which compose derives. Migrations run in the project's `migrate` service, not from this machine.
+
+Versions are tags and never change. Deploy a release: set `tag`, `chromatis deploy`. Roll back: the previous `tag`, `chromatis deploy`; or on the server, `IMAGE` in `.env` back and `docker compose up -d`. A deploy ends running Stateful Runtime sessions, so deploy outside lesson time.
+
+### The compose project
+
+`infra/deploy/compose.yaml`, usable without Chromatis (fill in `env.example` as `.env`):
+
+- `app`: the image, `TRUST_PROXY=1` (Caddy is the only client), the mount read-only at `/instance`, the `files` volume at `/files`, `DATABASE_POOL_SIZE` (default 5 per pool), `nofile` 65536.
+- `migrate`: the same image running `migrate.js`; the app starts after it succeeded.
+- `db`: PostgreSQL 17 on the named volume `db`; `postgres/init-roles.sh` creates the three roles and the database `app` on the first start.
+- `caddy`: TLS with automatic certificates for `DOMAIN`, no access log. `/files/*` comes from the `files` volume with `Cache-Control: immutable`; a path with a file in `instance/site` (`/x` as `x.html`, `/` as `index.html`, `/assets/*` immutable) comes from there; everything else, WebSockets included, goes to the app.
+
+### Backups
+
+`backup.sh` (in the project directory, e.g. daily from cron) writes `backups/<UTC time>/` with `app.dump` (`pg_dump --create`, so grants come back too), `files.tar.gz`, `instance.tar.gz` and `SHA256SUMS`, keeps the newest `BACKUP_KEEP` (14), and copies `backups/` to `BACKUP_TARGET` with `rsync` when set. For a Hetzner Storage Box use SSH port 23 through `~/.ssh/config`. `restore.sh backups/<time> [--instance]` checks the sums, stops app and Caddy, replaces the database and the files volume, and starts everything. On a new server deploy once with the same secrets (the init script creates the roles), copy the backup back into `backups/`, then restore.
 
 ## Database
 

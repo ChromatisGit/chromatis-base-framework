@@ -111,6 +111,26 @@ export type ResolvedApplication = Readonly<{
   bundledPackages: readonly string[];
   /** Extra directories the dev server may read (linked packages). */
   allowedRoots: readonly string[];
+  /**
+   * `instance = "mounted"`: a generic image. Module configuration and artifacts
+   * are read from `CHROMATIS_INSTANCE` when the server starts.
+   */
+  mounted: boolean;
+  /** The modules whose `config/<name>.toml` a mounted image reads, with their entry files. */
+  configModules: readonly Readonly<{
+    name: string;
+    entryFile: string;
+    required: boolean;
+  }>[];
+  /** An image deployment: the published image the instance runs on. */
+  image: Readonly<{ name: string; tag: string }> | undefined;
+  /** Where an image deployment runs; no `ssh` means this machine. */
+  server: Readonly<{
+    ssh: string | undefined;
+    path: string;
+    /** `BACKUP_TARGET` of backup.sh. */
+    backup: string | undefined;
+  }>;
 }>;
 
 export const targetFromConfig = (target: "cloudflare" | "bun"): BuildTarget =>

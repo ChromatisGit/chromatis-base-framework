@@ -359,7 +359,9 @@ export async function planEditorSchemas(
     }
   }
   const build = buildPlan(instance);
-  for (const provider of build.authoredFiles) {
+  // A mounted image has no content of its own to author.
+  const mounted = instance.appConfig?.deployment.instance === "mounted";
+  for (const provider of mounted ? [] : build.authoredFiles) {
     await planProvider(plan, instance, build, provider);
   }
   return plan.finish();

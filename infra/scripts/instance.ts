@@ -157,6 +157,37 @@ async function discover(root: string): Promise<{
   return { discovery, discovered, problems };
 }
 
+/** Config files no active module owns; a mounted image owns none but `app`. */
+function orphanConfigProblems(
+  root: string,
+  discovery: ManifestDiscovery,
+  mounted: boolean,
+  requested: readonly string[],
+  known: readonly string[],
+): Problem[] {
+  if (mounted) {
+    return findOrphanConfigs(root, ["app"], [], discovery.packageName).map(
+      (problem) => ({
+        ...problem,
+        message:
+          "a mounted image reads module configuration from the mount; remove the file",
+      }),
+    );
+  }
+  return findOrphanConfigs(
+    root,
+    [
+      "app",
+      ...discovery.manifest.modules
+        .filter((listed) => listed.config && !requested.includes(listed.name))
+        .map((listed) => listed.name),
+    ],
+    known,
+    discovery.packageName,
+    requested,
+  );
+}
+
 /**
  * Discovers modules and validates all configuration. Never throws for an
  * invalid instance; every finding is in `problems`. Config is validated in
@@ -204,15 +235,18 @@ export async function loadInstance(
       })
     : { shell: EMPTY_SHELL, problems: [] };
   problems.push(...extra.problems, ...shellProblems, ...rootProblems(shell));
+  // A mounted image reads module configuration when it starts, not here.
+  const mounted = appConfig?.deployment.instance === "mounted";
   const modules: InstanceModule[] = loaded.map((module) => ({
     module,
-    config: module.declaration.config
-      ? slot(
-          module.name,
-          module.declaration.config.schema,
-          module.declaration.config.required,
-        )
-      : undefined,
+    config:
+      module.declaration.config && !mounted
+        ? slot(
+            module.name,
+            module.declaration.config.schema,
+            module.declaration.config.required,
+          )
+        : undefined,
   }));
   problems.push(
     ...app.problems,
@@ -220,20 +254,7 @@ export async function loadInstance(
   );
   if (discovery) {
     problems.push(
-      ...findOrphanConfigs(
-        root,
-        [
-          "app",
-          ...discovery.manifest.modules
-            .filter(
-              (listed) => listed.config && !requested.includes(listed.name),
-            )
-            .map((listed) => listed.name),
-        ],
-        known,
-        discovery.packageName,
-        requested,
-      ),
+      ...orphanConfigProblems(root, discovery, mounted, requested, known),
     );
   }
 
@@ -270,6 +291,8 @@ export function applicationFrom(instance: Instance): ResolvedApplication {
     instance.environment,
   );
   const { deployment } = appConfig;
+  const mounted = deployment.instance === "mounted";
+  const plan = buildPlan(instance);
   return {
     name,
     instanceRoot: instance.root,
@@ -285,9 +308,29 @@ export function applicationFrom(instance: Instance): ResolvedApplication {
     optionalSecrets: optional,
     declaredSecrets: secrets,
     shell: instance.shell,
-    ...buildPlan(instance),
+    ...plan,
+    // A mounted image gets its artifacts from the mount, nothing produces them.
+    contributions: mounted ? [] : plan.contributions,
     bundledPackages: [discovery.packageName],
     allowedRoots: [discovery.packageRoot],
+    mounted,
+    configModules: modules.flatMap((module) =>
+      module.declaration.config
+        ? [
+            {
+              name: module.name,
+              entryFile: module.entryFile,
+              required: module.declaration.config.required ?? false,
+            },
+          ]
+        : [],
+    ),
+    image: deployment.image,
+    server: {
+      ssh: deployment.server.ssh,
+      path: deployment.server.path,
+      backup: deployment.server.backup,
+    },
   };
 }
 

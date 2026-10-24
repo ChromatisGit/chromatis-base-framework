@@ -25,6 +25,7 @@ import {
   type SecretLookup,
 } from "./secretStore.js";
 import { checkTooling, forbiddenFiles } from "./tooling.js";
+import { deploymentSecrets } from "./imageDeployment.js";
 
 export type PreflightOptions = Readonly<{
   root: string;
@@ -57,16 +58,21 @@ async function staticChecks(options: PreflightOptions, failures: string[]) {
     ...forbiddenFiles(root).map(
       (file) => `${file} is forbidden; remove it and run chromatis init`,
     ),
-    ...(
-      await validateArtifacts(app, (artifact) =>
-        path.join(artifactsDirectory(root), artifact.path),
-      )
-    ).map(formatProblem),
   );
-  try {
-    await loadHook(app);
-  } catch (error) {
-    failures.push(error instanceof Error ? error.message : String(error));
+  // A mounted image checks its artifacts and loads its hook when it starts.
+  if (!app.mounted) {
+    failures.push(
+      ...(
+        await validateArtifacts(app, (artifact) =>
+          path.join(artifactsDirectory(root), artifact.path),
+        )
+      ).map(formatProblem),
+    );
+    try {
+      await loadHook(app);
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : String(error));
+    }
   }
   attempt(() => migrationPlan(root, app.runtime, false), failures);
   if (app.postgresql) {
@@ -129,7 +135,7 @@ async function targetChecks(
     }
   }
   const missing = await missingSecrets(
-    app.secrets,
+    deploymentSecrets(app),
     applicationService(app.name, app.environment),
     lookup,
   );
@@ -148,6 +154,7 @@ async function targetChecks(
       failures.push(error instanceof Error ? error.message : String(error));
     }
   } else if (
+    !app.server.ssh &&
     spawnSync("docker", ["version", "--format", "{{.Server.Version}}"], {
       stdio: "ignore",
     }).status !== 0
@@ -156,7 +163,8 @@ async function targetChecks(
       "Docker unavailable; install and start Docker, then run chromatis doctor --target docker",
     );
   }
-  if (app.postgresql && !missing.includes("DATABASE_URL")) {
+  // An image deployment's database is inside its compose project.
+  if (app.postgresql && !app.image && !missing.includes("DATABASE_URL")) {
     await databaseChecks(options, failures);
   }
 }
@@ -169,7 +177,9 @@ async function postChecks(
   if (!existsSync(path.join(root, "build/client"))) {
     failures.push("build/client missing; run chromatis build");
   }
-  failures.push(...staleArtifacts(root, app).map(formatProblem));
+  if (!app.mounted) {
+    failures.push(...staleArtifacts(root, app).map(formatProblem));
+  }
   if (
     target === "cloudflare" &&
     level === "full" &&

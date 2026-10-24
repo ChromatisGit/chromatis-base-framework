@@ -52,6 +52,10 @@ function application(
     moduleConfigs: {},
     bundledPackages: [],
     allowedRoots: [],
+    mounted: false,
+    configModules: [],
+    image: undefined,
+    server: { ssh: undefined, path: "/srv/chromatis", backup: undefined },
     ...overrides,
   };
 }
