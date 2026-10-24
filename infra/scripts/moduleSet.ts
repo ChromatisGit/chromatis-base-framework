@@ -36,6 +36,13 @@ export type ContributionDeclaration = Readonly<{
 /** Secrets Chromatis itself needs because a module uses PostgreSQL. */
 export const DATABASE_SECRETS: readonly DeclaredSecret[] = [
   {
+    name: "DATABASE_AUTH_URL",
+    owner: "chromatis",
+    description:
+      "PostgreSQL connection of the auth principal (accounts, sessions)",
+    requirement: "always",
+  },
+  {
     name: "DATABASE_MIGRATION_URL",
     owner: "chromatis",
     description: "PostgreSQL owner connection used to apply migrations",

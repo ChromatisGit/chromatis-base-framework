@@ -107,7 +107,7 @@ describe("deployment preflight secrets", () => {
       lookup: nothing,
     });
     expect(found).toContain(
-      "missing secrets for production: DATABASE_MIGRATION_URL, DATABASE_URL, SESSION_KEY; run chromatis secret (or set them in the environment)",
+      "missing secrets for production: DATABASE_AUTH_URL, DATABASE_MIGRATION_URL, DATABASE_URL, SESSION_KEY; run chromatis secret (or set them in the environment)",
     );
   });
 

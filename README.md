@@ -97,7 +97,7 @@ Install the "Even Better TOML" extension (Taplo) in VS Code. Each hand-written T
 
 ### Secrets
 
-Modules declare secrets (`always` or `production`); values are never in TOML. `chromatis secret` is an interactive menu over every declared secret, the secrets Chromatis derives when a module uses PostgreSQL (`DATABASE_URL`, `DATABASE_MIGRATION_URL`) and the Cloudflare credentials. Values are typed into a masked prompt and stored in the operating system credential store under the service `dev.chromatis.<application name>`; they never appear in arguments or shell history. Lookups prefer an environment variable (CI, and the `.env.local` file Bun loads), then the credential store. Cloudflare receives secrets through Wrangler's standard input at deploy; Docker receives them in `.chromatis/build/app.env` (mode 0600).
+Modules declare secrets (`always` or `production`); values are never in TOML. `chromatis secret` is an interactive menu over every declared secret, the secrets Chromatis derives when a module uses PostgreSQL (`DATABASE_URL`, `DATABASE_MIGRATION_URL`, `DATABASE_AUTH_URL`) and the Cloudflare credentials. Values are typed into a masked prompt and stored in the operating system credential store under the service `dev.chromatis.<application name>`; they never appear in arguments or shell history. Lookups prefer an environment variable (CI, and the `.env.local` file Bun loads), then the credential store. Cloudflare receives secrets through Wrangler's standard input at deploy; Docker receives them in `.chromatis/build/app.env` (mode 0600).
 
 ### Runtime access to configuration
 

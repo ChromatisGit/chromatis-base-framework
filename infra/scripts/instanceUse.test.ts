@@ -35,6 +35,7 @@ describe("resolveApplication", () => {
       serverHook: path.join(packageRoot, "modules/classroom/hook.ts"),
       secrets: [
         "CATALOG_SALT",
+        "DATABASE_AUTH_URL",
         "DATABASE_MIGRATION_URL",
         "DATABASE_URL",
         "CLASSROOM_KEY",
@@ -44,6 +45,7 @@ describe("resolveApplication", () => {
     });
     const local = await resolveApplication(root, "local");
     expect(local.secrets).toEqual([
+      "DATABASE_AUTH_URL",
       "DATABASE_MIGRATION_URL",
       "DATABASE_URL",
       "CLASSROOM_KEY",
@@ -229,12 +231,14 @@ describe("inspect", () => {
       report.secrets.map((s) => [s.name, s.configured, s.requiredNow]),
     ).toEqual([
       ["CATALOG_SALT", false, true],
+      ["DATABASE_AUTH_URL", false, true],
       ["DATABASE_MIGRATION_URL", false, true],
       ["DATABASE_URL", false, true],
       ["CLASSROOM_KEY", true, true],
     ]);
     expect(report.unmet).toEqual([
       "secret CATALOG_SALT (catalog) is not set; run chromatis secret",
+      "secret DATABASE_AUTH_URL (chromatis) is not set; run chromatis secret",
       "secret DATABASE_MIGRATION_URL (chromatis) is not set; run chromatis secret",
       "secret DATABASE_URL (chromatis) is not set; run chromatis secret",
     ]);
