@@ -3,6 +3,7 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   rmSync,
   writeFileSync,
@@ -81,6 +82,7 @@ export async function writeImageContext(
       : 'console.info("[migrate] no module uses PostgreSQL");\n',
   );
   await bundleForBun(root, entry, path.join(image, "migrate.js"));
+  await bundleCommands(root, app, image);
   const modules = path.join(app.packageRoot, "src/modules");
   rmSync(path.join(image, "src"), { recursive: true, force: true });
   if (!existsSync(modules)) {
@@ -95,6 +97,29 @@ export async function writeImageContext(
         });
       }
     }
+  }
+}
+
+/** The product's `bin` commands, bundled into `bin/` of the image (on PATH). */
+async function bundleCommands(
+  root: string,
+  app: ResolvedApplication,
+  image: string,
+): Promise<void> {
+  const manifest = JSON.parse(
+    readFileSync(path.join(app.packageRoot, "package.json"), "utf8"),
+  ) as { bin?: string | Record<string, string> };
+  const commands =
+    typeof manifest.bin === "string"
+      ? { [path.basename(app.packageRoot)]: manifest.bin }
+      : (manifest.bin ?? {});
+  rmSync(path.join(image, "bin"), { recursive: true, force: true });
+  for (const [name, file] of Object.entries(commands)) {
+    const target = path.join(image, "bin", name);
+    await bundleForBun(root, path.resolve(app.packageRoot, file), target);
+    const code = readFileSync(target, "utf8").replace(/^#!.*\n/, "");
+    writeFileSync(target, `#!/usr/bin/env bun\n${code}`);
+    chmodSync(target, 0o755);
   }
 }
 

@@ -2,7 +2,11 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { loadMigrationFiles, startDatabase } from "./dbMigrations.ts";
+import {
+  applicationRootFor,
+  loadMigrationFiles,
+  startDatabase,
+} from "./dbMigrations.ts";
 
 const temporaryDirectories: string[] = [];
 
@@ -51,5 +55,15 @@ describe("migration discovery", () => {
     expect((startupError as Error).message).toContain(
       "SQL routine sources are not tracked",
     );
+  });
+});
+
+describe("application root", () => {
+  test("the image's CHROMATIS_APPLICATION_ROOT wins over a derived path", () => {
+    expect(applicationRootFor("/pkg", {})).toBe("/pkg");
+    expect(
+      applicationRootFor("/pkg", { CHROMATIS_APPLICATION_ROOT: "/app" }),
+    ).toBe("/app");
+    expect(applicationRootFor(undefined, {})).toBe(process.cwd());
   });
 });

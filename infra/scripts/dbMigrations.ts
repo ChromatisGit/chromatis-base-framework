@@ -113,10 +113,20 @@ function discoverApplicationMigrations(
   return loadMigrationFiles(path.join(applicationRoot, "src/modules"));
 }
 
+/**
+ * Where the product's `src/modules` are. A built image has no package layout,
+ * so the image names the place (`CHROMATIS_APPLICATION_ROOT`) and that wins
+ * over a path the code derives from its own location.
+ */
+export const applicationRootFor = (
+  chosen: string | undefined,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string => env.CHROMATIS_APPLICATION_ROOT ?? chosen ?? process.cwd();
+
 export async function startDatabase(
   options: DatabaseStartupOptions,
 ): Promise<Database> {
-  const applicationRoot = options.applicationRoot ?? process.cwd();
+  const applicationRoot = applicationRootFor(options.applicationRoot);
   const migrations = discoverApplicationMigrations(applicationRoot);
   const database = createDatabase(options.databaseUrl, {
     runtime: options.runtime,
@@ -164,7 +174,7 @@ export async function runDbMigrations(
       migrationDatabaseUrl,
       runtime: "bun",
       environment: "local",
-      applicationRoot: options?.applicationRoot ?? process.cwd(),
+      applicationRoot: applicationRootFor(options?.applicationRoot),
     });
   } finally {
     await closeNodeDatabasePools();

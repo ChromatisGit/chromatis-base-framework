@@ -83,7 +83,7 @@ path = "/srv/chromatis"   # the default
 backup = "u1@u1.your-storagebox.de:app"   # optional, see Backups
 ```
 
-**The mounted image.** `chromatis build` bundles `server.js` and `migrate.js` into `.chromatis/image` with the client build and the product's `src/modules/*/{migrations,sql}`; `docker build -f infra/deploy/Dockerfile .chromatis/image` makes the image. Module configuration and artifacts are not embedded. At startup the server reads them from `CHROMATIS_INSTANCE` (default `/instance`):
+**The mounted image.** `chromatis build` bundles `server.js`, `migrate.js` and the product's `bin` commands (into `bin/`, on the image's `PATH`: `docker compose exec app <command>`) into `.chromatis/image` with the client build and the product's `src/modules/*/{migrations,sql}`; the image sets `CHROMATIS_APPLICATION_ROOT=/app`, which wins over the `applicationRoot` code derives from its own location, so the server and `migrate.js` find those migrations; `docker build -f infra/deploy/Dockerfile .chromatis/image` makes the image. Module configuration and artifacts are not embedded. At startup the server reads them from `CHROMATIS_INSTANCE` (default `/instance`):
 
 | Path                         | Read as                                                                              |
 | ---------------------------- | ------------------------------------------------------------------------------------ |

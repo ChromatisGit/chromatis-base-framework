@@ -5,7 +5,10 @@
 FROM oven/bun:1.4.2-slim
 WORKDIR /app
 COPY . .
-ENV NODE_ENV=production PORT=3000 CHROMATIS_INSTANCE=/instance
+# bin/: the product's commands (package.json `bin`), e.g.
+# `docker compose exec app studyluma-admin <email>`.
+ENV NODE_ENV=production PORT=3000 CHROMATIS_INSTANCE=/instance \
+  CHROMATIS_APPLICATION_ROOT=/app PATH=/app/bin:$PATH
 USER bun
 ARG APP_PORT=3000
 EXPOSE ${APP_PORT}
