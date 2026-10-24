@@ -35,6 +35,17 @@ last login and the open link's expiry. None of these check a role: the caller
 User with `setUserEnabled(…, false)` makes its sessions resolve to `null`;
 `revokeAll(user)` also deletes them.
 
+## API tokens
+
+Command-line tools act as a User with an API token instead of a password.
+`issueApiToken(auth, user, label)` returns `{ id, token }` once (tokens start with
+`chr_`); only the SHA-256 is stored in `api_tokens`, and a User may hold several.
+`resolveApiToken(auth, token)` returns the User, or null when the token is unknown,
+revoked or its User is disabled, and records `last_used_at`. `listApiTokens` shows
+label and times, never a token; `revokeApiToken(auth, user, id)` deletes one. As
+with setup links, the caller decides who may issue tokens for whom. The tool keeps
+its token in the operating system's credential store (`Bun.secrets`), not in a file.
+
 ## Generic OIDC
 
 `createOidcProvider(configuration, dependencies)` implements the provider-neutral

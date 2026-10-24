@@ -229,3 +229,107 @@ export async function getAccount(
   );
   return account ?? null;
 }
+
+export type ApiToken = Readonly<{
+  id: string;
+  label: string;
+  createdAt: Date;
+  lastUsedAt: Date | null;
+}>;
+
+/**
+ * Issues an API token with which a command-line tool acts as `user`. The
+ * token is returned once; only its hash is stored. A User may hold several.
+ */
+export async function issueApiToken(
+  auth: AuthDatabase,
+  user: User,
+  label: string,
+): Promise<Readonly<{ id: string; token: string }>> {
+  const token = `chr_${toBase64Url(crypto.getRandomValues(new Uint8Array(32)))}`;
+  const hash = await tokenHash(token);
+  const rows = await auth.transaction(
+    (sql) =>
+      sql<Array<{ id: string }>>`
+        INSERT INTO api_tokens (token_hash, user_id, label)
+        VALUES (${hash}, ${user.id}, ${label})
+        RETURNING id
+      `,
+  );
+  const row = rows[0];
+  if (!row) {
+    throw new Error("The API token was not stored");
+  }
+  return { id: row.id, token };
+}
+
+/**
+ * The User an API token belongs to, or null: unknown, revoked, or the User
+ * is disabled. Records when the token was last used.
+ */
+export async function resolveApiToken(
+  auth: AuthDatabase,
+  token: string,
+  options: Clock = {},
+): Promise<User | null> {
+  if (!token.startsWith("chr_")) {
+    return null;
+  }
+  const now = options.now?.() ?? new Date();
+  const hash = await tokenHash(token);
+  const rows = await auth.transaction(
+    (sql) =>
+      sql<Array<{ user_id: string }>>`
+        UPDATE api_tokens t SET last_used_at = ${now}
+        FROM users u
+        WHERE t.token_hash = ${hash} AND u.id = t.user_id AND u.enabled
+        RETURNING t.user_id
+      `,
+  );
+  const row = rows[0];
+  return row ? { id: row.user_id } : null;
+}
+
+/** The API tokens of a User, newest first; never the tokens themselves. */
+export async function listApiTokens(
+  auth: AuthDatabase,
+  user: User,
+): Promise<ApiToken[]> {
+  const rows = await auth.transaction(
+    (sql) =>
+      sql<
+        Array<{
+          id: string;
+          label: string;
+          created_at: Date;
+          last_used_at: Date | null;
+        }>
+      >`
+        SELECT id, label, created_at, last_used_at FROM api_tokens
+        WHERE user_id = ${user.id}
+        ORDER BY created_at DESC, id
+      `,
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    label: row.label,
+    createdAt: row.created_at,
+    lastUsedAt: row.last_used_at,
+  }));
+}
+
+/** Revokes one of a User's API tokens; false when it has no such token. */
+export async function revokeApiToken(
+  auth: AuthDatabase,
+  user: User,
+  tokenId: string,
+): Promise<boolean> {
+  const rows = await auth.transaction(
+    (sql) =>
+      sql<Array<{ id: string }>>`
+        DELETE FROM api_tokens WHERE id = ${tokenId} AND user_id = ${user.id}
+        RETURNING id
+      `,
+  );
+  return rows.length > 0;
+}

@@ -125,6 +125,23 @@ GRANT SELECT, INSERT, DELETE ON password_setup_tokens TO chromatis_auth;
 GRANT UPDATE (pin_hash, password_set_at, last_login_at) ON users TO chromatis_auth;
 `;
 
+// API tokens: a command-line tool acts as its User without a password. Only
+// the SHA-256 of a token is stored; a token works while its User is enabled.
+const addApiTokens = `
+CREATE TABLE api_tokens (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  token_hash text NOT NULL UNIQUE,
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  label text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  last_used_at timestamptz
+);
+CREATE INDEX api_tokens_user_id_idx ON api_tokens (user_id);
+
+REVOKE ALL ON TABLE api_tokens FROM PUBLIC;
+GRANT SELECT, INSERT, DELETE, UPDATE (last_used_at) ON api_tokens TO chromatis_auth;
+`;
+
 export const authMigrations: readonly MigrationAsset[] = [
   {
     module: "chromatis-auth",
@@ -143,5 +160,11 @@ export const authMigrations: readonly MigrationAsset[] = [
     version: "1.2.0",
     description: "add password setup links and login times",
     sql: addPasswordSetup,
+  },
+  {
+    module: "chromatis-auth",
+    version: "1.3.0",
+    description: "add api tokens",
+    sql: addApiTokens,
   },
 ];

@@ -9,9 +9,13 @@ import { createAuthDatabase } from "../../src/auth/database.server.js";
 import {
   createAccount,
   getAccount,
+  issueApiToken,
   issueSetupLink,
   listAccounts,
+  listApiTokens,
   redeemSetupLink,
+  resolveApiToken,
+  revokeApiToken,
   setupLinkValid,
 } from "../../src/auth/accounts.server.js";
 import { loginUser, registerUser } from "../../src/auth/users.server.js";
@@ -214,6 +218,7 @@ test("runtime SQL cannot read or write framework state directly", async () => {
     "roles",
     "user_roles",
     "external_identities",
+    "api_tokens",
   ]) {
     await expect(
       database.publicSQL`SELECT 1 FROM ${database.publicSQL.identifier(table)}`,
@@ -429,4 +434,40 @@ test("an expired link or a disabled account sets no password", async () => {
   expect(
     await redeemSetupLink(auth, link.token, "password", { now: () => now }),
   ).toEqual({ status: "invalid" });
+});
+
+test("an API token acts as its User until revoked or the User is disabled", async () => {
+  const auth = authDatabase();
+  const created = await createAccount(auth, {
+    username: "publisher@example.test",
+    roles: [],
+  });
+  if (created.status !== "created") {
+    throw new Error("Expected the account to be created.");
+  }
+  const now = new Date("2030-01-01T00:00:00.000Z");
+  const first = await issueApiToken(auth, created.user, "laptop");
+  const second = await issueApiToken(auth, created.user, "ci");
+  expect(first.token).toStartWith("chr_");
+  expect(await resolveApiToken(auth, first.token, { now: () => now })).toEqual(
+    created.user,
+  );
+  expect(await resolveApiToken(auth, "chr_unknown")).toBeNull();
+  expect(await resolveApiToken(auth, "not-a-token")).toBeNull();
+  const listed = await listApiTokens(auth, created.user);
+  expect(listed.map((token) => token.label).sort()).toEqual(["ci", "laptop"]);
+  expect(listed.find((token) => token.id === first.id)?.lastUsedAt).toEqual(
+    now,
+  );
+  const stored = await ownerSql<Array<{ token_hash: string }>>`
+    SELECT token_hash FROM api_tokens
+  `;
+  expect(stored.map((row) => row.token_hash)).not.toContain(first.token);
+
+  expect(await revokeApiToken(auth, created.user, first.id)).toBe(true);
+  expect(await revokeApiToken(auth, created.user, first.id)).toBe(false);
+  expect(await resolveApiToken(auth, first.token)).toBeNull();
+
+  await ownerSql`UPDATE users SET enabled = false WHERE id = ${created.user.id}`;
+  expect(await resolveApiToken(auth, second.token)).toBeNull();
 });

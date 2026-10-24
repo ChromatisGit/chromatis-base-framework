@@ -2,9 +2,13 @@ export {
   createAccount,
   DEFAULT_SETUP_LINK_SECONDS,
   getAccount,
+  issueApiToken,
   issueSetupLink,
   listAccounts,
+  listApiTokens,
   redeemSetupLink,
+  resolveApiToken,
+  revokeApiToken,
   setupLinkValid,
 } from "./auth/accounts.server.js";
 export { createAuthDatabase } from "./auth/database.server.js";
@@ -27,6 +31,7 @@ export {
 } from "./auth/users.server.js";
 export type {
   Account,
+  ApiToken,
   CreateAccountResult,
   RedeemSetupLinkResult,
   SetupLink,
