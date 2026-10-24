@@ -246,6 +246,32 @@ function documentAtRoot() {
   };
 }
 
+/**
+ * `chromatis-config` and `chromatis-artifacts` are server data. Browser code
+ * that imports a server module only for its types still names them; the
+ * browser gets empty values instead (a mounted image's loaders read files).
+ */
+function serverOnlyModules(root) {
+  const files = new Set(
+    ["artifacts.ts", "config.ts"].map((file) =>
+      path.join(root, ".chromatis/build", file),
+    ),
+  );
+  return {
+    name: "chromatis-server-only-modules",
+    load(id) {
+      if (this.environment?.name !== "client" || !files.has(id)) {
+        return undefined;
+      }
+      return [
+        "export const config = {};",
+        'export const app = { name: "", domain: "", publicUrl: "", environment: "" };',
+        "export const artifacts = {};",
+      ].join("\n");
+    },
+  };
+}
+
 function localDependencyRoots(root) {
   const manifest = JSON.parse(
     readFileSync(path.join(root, "package.json"), "utf8"),
@@ -261,6 +287,7 @@ export async function createViteConfig() {
   const plugins = [
     tsconfigPaths({ projects: [path.join(root, "tsconfig.json")] }),
     documentAtRoot(),
+    serverOnlyModules(root),
     ...productPublic(context.productPublic, root),
   ];
   if (!process.env.CHROMATIS_BUILD_TARGET) {
