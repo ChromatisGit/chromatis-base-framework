@@ -38,7 +38,23 @@ export type PageModule = Readonly<{
   HydrateFallback?: ComponentType;
   meta?: MetaFunctionLike;
   handle?: Record<string, unknown>;
+  /**
+   * Runs in the browser after the route's server loader, with its data, and
+   * its result is what the page reads (`useLoaderData`). For data the server
+   * only points to, such as immutable files the browser fetches itself. Not
+   * run for prerendered pages at build time.
+   */
+  clientLoader?: ClientLoader;
 }>;
+
+export type ClientLoaderArgs = Readonly<{
+  /** The server loader's data; null for a route without a server file. */
+  data: unknown;
+  params: Readonly<Record<string, string | undefined>>;
+  request: Request;
+}>;
+
+export type ClientLoader = (args: ClientLoaderArgs) => unknown;
 
 /** What a page's `meta` receives: its loader's data once loaded. */
 export type MetaArgs<Loader extends (...args: never[]) => unknown> = Readonly<{
@@ -166,9 +182,13 @@ const serverAction =
 /** Placeholder: `dataStrategy` answers server loaders from the batch. */
 const serverLoader = () => null;
 
+/** A route's page file, by route id: where the data strategy finds client loaders. */
+export type PageFiles = ReadonlyMap<string, () => Promise<PageModule>>;
+
 export function createDataStrategy(
   servers: ReadonlySet<string>,
   fetchData: FetchData = browserFetch,
+  pages: PageFiles = new Map(),
 ): DataStrategyFunction {
   return async ({ request, matches }) => {
     const pending = matches.filter((match) => match.shouldCallHandler());
@@ -185,14 +205,27 @@ export function createDataStrategy(
       pending.map(async (match) => [
         match.route.id,
         await match.resolve(async (handler) => {
+          let data: unknown;
           if (!batch || !servers.has(match.route.id)) {
-            return handler();
+            data = await handler();
+          } else {
+            const body = await batch;
+            if ("redirect" in body) {
+              throw redirectTo(body);
+            }
+            data = unpack(body.results[match.route.id]);
           }
-          const body = await batch;
-          if ("redirect" in body) {
-            throw redirectTo(body);
+          if (request.method !== "GET") {
+            return data;
           }
-          return unpack(body.results[match.route.id]);
+          // The router loads a lazy page while the server answers, so the
+          // client loader is looked up in the page file itself. Without
+          // `pages` (prerendering at build time) none runs.
+          const page = pages.get(match.route.id);
+          const clientLoader = page && (await page()).clientLoader;
+          return clientLoader
+            ? clientLoader({ data, params: match.params, request })
+            : data;
         }),
       ]),
     );
@@ -201,8 +234,10 @@ export function createDataStrategy(
 }
 
 /** What the router needs from a page file. */
-function pageRoute(page: PageModule) {
+function pageRoute(page: PageModule, server: boolean) {
   return {
+    // Without a server file the router calls no loader unless there is one.
+    ...(page.clientLoader && !server ? { loader: serverLoader } : {}),
     ...(page.default ? { Component: page.default } : {}),
     ...(page.ErrorBoundary
       ? { ErrorBoundary: errorBoundary(page.ErrorBoundary) }
@@ -229,8 +264,8 @@ function toRouteObject(
       ? { loader: serverLoader, action: serverAction(route.id) }
       : {}),
     ...(page
-      ? pageRoute(page)
-      : { lazy: async () => pageRoute(await route.page()) }),
+      ? pageRoute(page, !!route.server)
+      : { lazy: async () => pageRoute(await route.page(), !!route.server) }),
   };
   return route.index
     ? { ...common, index: true }
@@ -303,8 +338,18 @@ const Empty = () => null;
 export function createRoutes(
   app: AppDefinition,
   loaded: ReadonlyMap<string, PageModule> = new Map(),
-): { routes: RouteObject[]; servers: Set<string> } {
+): { routes: RouteObject[]; servers: Set<string>; pages: PageFiles } {
   const servers = new Set<string>(app.rootServer ? ["root"] : []);
+  const pages = new Map<string, () => Promise<PageModule>>([
+    ["root", async () => app.root],
+  ]);
+  const collect = (list: readonly ClientRoute[]) => {
+    for (const route of list) {
+      pages.set(route.id, route.page);
+      collect(route.children ?? []);
+    }
+  };
+  collect(app.routes);
   const Root = app.root.default ?? Empty;
   const routes: RouteObject[] = [
     {
@@ -330,7 +375,7 @@ export function createRoutes(
       ),
     },
   ];
-  return { routes, servers };
+  return { routes, servers, pages };
 }
 
 function routeIndex(
@@ -382,12 +427,12 @@ export async function startApp(app: AppDefinition): Promise<void> {
   }
   const prerendered = window.__chromatisPrerender;
   const hydrate = prerendered?.path === window.location.pathname;
-  const { routes, servers } = createRoutes(
+  const { routes, servers, pages } = createRoutes(
     app,
     hydrate ? await pagesFor(app, window.location.pathname) : undefined,
   );
   const router = createBrowserRouter(routes, {
-    dataStrategy: createDataStrategy(servers),
+    dataStrategy: createDataStrategy(servers, browserFetch, pages),
     ...(hydrate ? { hydrationData: prerendered.hydrationData } : {}),
   });
   const tree = (

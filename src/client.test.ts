@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { DataStrategyFunctionArgs } from "react-router";
-import { createDataStrategy, dataUrl, redirectTo, unpack } from "./client.js";
+import {
+  createDataStrategy,
+  dataUrl,
+  redirectTo,
+  unpack,
+  type ClientLoader,
+} from "./client.js";
 import type { DataResponse } from "./data-protocol.js";
 
 const realFetch = globalThis.fetch;
@@ -21,12 +27,19 @@ function serve(body: DataResponse): string[] {
 /** The parts of a navigation's matches the strategy uses. */
 function navigation(
   url: string,
-  routes: readonly { id: string; run?: boolean; loader?: () => unknown }[],
+  routes: readonly {
+    id: string;
+    run?: boolean;
+    loader?: () => unknown;
+    clientLoader?: (args: { data: unknown; params: object }) => unknown;
+  }[],
+  method = "GET",
 ) {
   return {
-    request: new Request(url),
+    request: new Request(url, { method }),
     matches: routes.map((route) => ({
       route: { id: route.id },
+      params: { slug: "a" },
       shouldCallHandler: () => route.run ?? true,
       resolve: async (call: (handler: () => unknown) => Promise<unknown>) => {
         try {
@@ -41,6 +54,23 @@ function navigation(
     })),
   } as unknown as DataStrategyFunctionArgs;
 }
+
+/** The page files of these routes, as `createRoutes` lists them. */
+const pagesOf = (
+  routes: readonly {
+    id: string;
+    clientLoader?: (args: { data: unknown; params: object }) => unknown;
+  }[],
+) =>
+  new Map(
+    routes.map((route) => [
+      route.id,
+      async () =>
+        route.clientLoader
+          ? { clientLoader: route.clientLoader as ClientLoader }
+          : {},
+    ]),
+  );
 
 describe("data URLs", () => {
   test("keep the page's path and query", () => {
@@ -140,5 +170,53 @@ describe("the data strategy", () => {
     );
     expect(results.root).toEqual({ type: "data", result: 1 });
     expect((results.sheet?.result as Response).status).toBe(404);
+  });
+
+  test("a page's client loader turns its server data into the page's data", async () => {
+    serve({ results: { root: { data: "r" }, sheet: { data: { file: "f" } } } });
+    const seen: unknown[] = [];
+    const routes = [
+      { id: "root" },
+      {
+        id: "sheet",
+        clientLoader: async ({
+          data,
+          params,
+        }: {
+          data: unknown;
+          params: object;
+        }) => {
+          seen.push(params);
+          return { loaded: (data as { file: string }).file };
+        },
+      },
+      {
+        id: "local",
+        clientLoader: ({ data }: { data: unknown }) => ({ local: data }),
+      },
+    ];
+    const results = await createDataStrategy(
+      new Set(["root", "sheet"]),
+      undefined,
+      pagesOf(routes),
+    )(navigation("http://x/sheets/a", routes));
+    expect(results).toEqual({
+      root: { type: "data", result: "r" },
+      sheet: { type: "data", result: { loaded: "f" } },
+      local: { type: "data", result: { local: null } },
+    });
+    expect(seen).toEqual([{ slug: "a" }]);
+  });
+
+  test("an action's result does not pass through the client loader", async () => {
+    const routes = [
+      { id: "sheet", loader: () => "saved", clientLoader: () => "client" },
+    ];
+    const results = await createDataStrategy(
+      new Set(["sheet"]),
+      undefined,
+      pagesOf(routes),
+    )(navigation("http://x/sheets/a", routes, "POST"));
+    expect(results.sheet).toEqual({ type: "data", result: "saved" });
   });
 });
