@@ -11,7 +11,9 @@
  *   application persistence and does not survive a host restart or eviction.
  * - All entry points of one instance (commands, connects, messages,
  *   disconnects, close) run one at a time, in arrival order.
- * - Commands and their results must be JSON-serializable.
+ * - Commands and their results must be JSON-serializable. The Cloudflare host
+ *   copies them through JSON; the Bun host passes them by reference, so a
+ *   value must not be changed after it was handed over.
  * - Realtime messages are text frames; the application defines their meaning.
  * - Closing an instance closes every connection (code 1000), runs `onClose`
  *   once, and makes the address unknown. Closing is idempotent.

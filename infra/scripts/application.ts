@@ -178,11 +178,14 @@ export function generateArtifacts(
   const serverImport = JSON.stringify(
     path.join(frameworkRoot, "src/server.ts"),
   );
+  const workerImport = JSON.stringify(
+    path.join(frameworkRoot, "src/server.worker.ts"),
+  );
   const cloudflareImport = JSON.stringify(
     path.join(frameworkRoot, "src/stateful/cloudflare.ts"),
   );
   const worker = [
-    `import { createFrameworkWorker } from ${serverImport};`,
+    `import { createFrameworkWorker } from ${workerImport};`,
     'import * as routes from "./routes";',
     ...(hookImport ? [`import hook from ${hookImport};`] : []),
     ...(declaration.runtime.length

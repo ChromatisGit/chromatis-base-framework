@@ -87,8 +87,7 @@ export class RuntimeInstance {
       if (!this.behavior.onCommand) {
         throw new ValidationError("Instance does not accept commands");
       }
-      const result = await this.behavior.onCommand(roundTrip(command));
-      return roundTrip(result ?? null);
+      return (await this.behavior.onCommand(command)) ?? null;
     });
   }
 
@@ -236,13 +235,4 @@ export class RuntimeInstance {
       ...(error instanceof AppError && { code: error.code }),
     });
   }
-}
-
-/** Enforces the JSON-serializable contract identically on every host. */
-export function roundTrip(value: RuntimeJson): RuntimeJson {
-  const text = JSON.stringify(value);
-  if (text === undefined) {
-    throw new ValidationError("Runtime values must be JSON-serializable");
-  }
-  return JSON.parse(text) as RuntimeJson;
 }

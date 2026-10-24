@@ -15,7 +15,7 @@ import {
   type RuntimeJson,
   type StatefulRuntime,
 } from "./contract.js";
-import { RuntimeInstance, roundTrip } from "./instance.js";
+import { RuntimeInstance } from "./instance.js";
 
 /*
  * Cloudflare specifics stay in this file. The Worker-side host talks to one
@@ -331,4 +331,16 @@ export function createRuntimeDurableObject(
       super(known, platform);
     }
   };
+}
+
+/**
+ * Commands cross the Worker/Durable Object boundary as JSON; this rejects a
+ * value that would not survive the trip before it is sent.
+ */
+function roundTrip(value: RuntimeJson): RuntimeJson {
+  const text = JSON.stringify(value);
+  if (text === undefined) {
+    throw new ValidationError("Runtime values must be JSON-serializable");
+  }
+  return JSON.parse(text) as RuntimeJson;
 }

@@ -8,7 +8,7 @@ import {
   type RuntimeJson,
   type StatefulRuntime,
 } from "./contract.js";
-import { RuntimeInstance, roundTrip } from "./instance.js";
+import { RuntimeInstance } from "./instance.js";
 
 type SocketData = {
   key: string;
@@ -129,7 +129,7 @@ export function createBunRuntimeHost(
         const instance = await RuntimeInstance.start(
           definition,
           address,
-          roundTrip(init),
+          init,
           () => {
             if (instances.get(id) === instance) {
               instances.delete(id);
