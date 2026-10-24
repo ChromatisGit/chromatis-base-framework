@@ -1,3 +1,11 @@
+export {
+  createAccount,
+  DEFAULT_SETUP_LINK_SECONDS,
+  issueSetupLink,
+  listAccounts,
+  redeemSetupLink,
+  setupLinkValid,
+} from "./auth/accounts.server.js";
 export { createAuthDatabase } from "./auth/database.server.js";
 export { hashPin, verifyPin } from "./auth/hash.server.js";
 export { authMigrations } from "./auth/migrations.js";
@@ -16,6 +24,12 @@ export {
   registerUser,
   setUserEnabled,
 } from "./auth/users.server.js";
+export type {
+  Account,
+  CreateAccountResult,
+  RedeemSetupLinkResult,
+  SetupLink,
+} from "./auth/accounts.server.js";
 export type {
   AuthDatabase,
   AuthDatabaseOptions,

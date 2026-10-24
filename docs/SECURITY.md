@@ -29,12 +29,12 @@ local). The database exposes it through:
 There is no generic permission table; use roles plus `access.toml`.
 
 The runtime role has **no** table privileges on framework state (`users`, `roles`,
-`user_roles`, `auth_sessions`, `external_identities`, OIDC attempts). Runtime SQL cannot
+`user_roles`, `auth_sessions`, `external_identities`, OIDC attempts, setup links). Runtime SQL cannot
 change the authorization state it is checked against, nor read PIN hashes or sessions.
 Framework code reaches that state only through narrow `chromatis.*` functions (see
 below). Roles and role assignments are managed by owner-run migrations or admin tooling;
-the only runtime path is `chromatis.register_user`, which makes the very first User an
-admin. Roles referenced by `access.toml` must exist in `roles` (seed them in a migration
+the runtime paths are `registerUser`, which makes the very first User an admin, and
+`createAccount`, whose caller checks the role. Setup links are stored as SHA-256 only. Roles referenced by `access.toml` must exist in `roles` (seed them in a migration
 before generating); generation and the audit both check this.
 
 ## PostgreSQL roles

@@ -6,7 +6,14 @@ import path from "node:path";
 import postgres from "postgres";
 import { createDatabaseOidcAuthorizationAttemptStore } from "../../src/auth/oidc.js";
 import { createAuthDatabase } from "../../src/auth/database.server.js";
-import { registerUser } from "../../src/auth/users.server.js";
+import {
+  createAccount,
+  issueSetupLink,
+  listAccounts,
+  redeemSetupLink,
+  setupLinkValid,
+} from "../../src/auth/accounts.server.js";
+import { loginUser, registerUser } from "../../src/auth/users.server.js";
 import { createSessionManager } from "../../src/auth/session.server.js";
 import { resolveExternalIdentity } from "../../src/auth/sso.server.js";
 import { createDatabase } from "../../src/db/client.js";
@@ -314,4 +321,110 @@ test("concurrent first-time SSO callbacks resolve one user without orphans", asy
     WHERE u.username IS NULL AND identity.user_id IS NULL
   `;
   expect([...orphanCountAfter]).toEqual([...orphanCountBefore]);
+});
+
+test("an account sets its password once through a link that expires", async () => {
+  const auth = authDatabase();
+  await ownerSql`
+    INSERT INTO roles (key, description)
+    VALUES ('teacher', 'Teacher') ON CONFLICT DO NOTHING
+  `;
+  const created = await createAccount(auth, {
+    username: "teacher@example.test",
+    roles: ["teacher"],
+  });
+  if (created.status !== "created") {
+    throw new Error("Expected the account to be created.");
+  }
+  expect(
+    await createAccount(auth, {
+      username: "teacher@example.test",
+      roles: [],
+    }),
+  ).toEqual({ status: "username_taken" });
+  // No password yet: no login.
+  expect(await loginUser(auth, "teacher@example.test", "")).toEqual({
+    status: "invalid_credentials",
+  });
+
+  const now = new Date("2030-01-01T00:00:00.000Z");
+  const first = await issueSetupLink(auth, created.user, { now: () => now });
+  const second = await issueSetupLink(auth, created.user, { now: () => now });
+  // A new link replaces the old one.
+  expect(await setupLinkValid(auth, first.token, { now: () => now })).toBe(
+    false,
+  );
+  expect(await setupLinkValid(auth, second.token, { now: () => now })).toBe(
+    true,
+  );
+  const later = new Date(second.expiresAt.getTime() + 1);
+  expect(await setupLinkValid(auth, second.token, { now: () => later })).toBe(
+    false,
+  );
+
+  const sessions = createSessionManager({ auth, cookieName: "sid" });
+  const before = await sessions.create(created.user);
+  expect(
+    await redeemSetupLink(auth, second.token, "correct horse", {
+      now: () => now,
+    }),
+  ).toEqual({ status: "ok", user: created.user });
+  // Setting the password signs out every earlier session.
+  const request = new Request("https://app.test", {
+    headers: { cookie: `sid=${before.session.id}` },
+  });
+  expect(await sessions.resolve(request)).toBeNull();
+  // The link is used up.
+  expect(
+    await redeemSetupLink(auth, second.token, "other", { now: () => now }),
+  ).toEqual({ status: "invalid" });
+  expect(
+    await loginUser(auth, "teacher@example.test", "correct horse"),
+  ).toEqual({ status: "ok", user: created.user });
+
+  const account = (await listAccounts(auth)).find(
+    (entry) => entry.id === created.user.id,
+  );
+  expect(account).toMatchObject({
+    username: "teacher@example.test",
+    enabled: true,
+    roles: ["teacher"],
+    passwordSetAt: now,
+    setupLinkExpiresAt: null,
+  });
+  expect(account?.lastLoginAt).toBeInstanceOf(Date);
+  const stored = await ownerSql<Array<{ token_hash: string }>>`
+    SELECT token_hash FROM password_setup_tokens
+  `;
+  expect(stored.map((row) => row.token_hash)).not.toContain(second.token);
+});
+
+test("an expired link or a disabled account sets no password", async () => {
+  const auth = authDatabase();
+  const created = await createAccount(auth, {
+    username: "disabled@example.test",
+    roles: [],
+  });
+  if (created.status !== "created") {
+    throw new Error("Expected the account to be created.");
+  }
+  const now = new Date("2030-01-01T00:00:00.000Z");
+  const expired = await issueSetupLink(auth, created.user, {
+    now: () => now,
+    lifetimeSeconds: 60,
+  });
+  expect(
+    await redeemSetupLink(auth, expired.token, "password", {
+      now: () => new Date(now.getTime() + 61_000),
+    }),
+  ).toEqual({ status: "invalid" });
+
+  const link = await issueSetupLink(auth, created.user, { now: () => now });
+  await ownerSql`UPDATE users SET enabled = false WHERE id = ${created.user.id}`;
+  expect(await setupLinkValid(auth, link.token, { now: () => now })).toBe(
+    false,
+  );
+  expect(
+    await redeemSetupLink(auth, link.token, "password", { now: () => now }),
+  ).toEqual({ status: "invalid" });
 });

@@ -1,0 +1,208 @@
+import { hashPin } from "./hash.server.js";
+import type { AuthDatabase } from "./database.server.js";
+import type { User } from "./types.js";
+
+/**
+ * Accounts an administrator creates by hand: the User gets a username and its
+ * roles, then sets its own password through a one-time link. These functions
+ * check no role themselves; callers (an admin page, a command-line bootstrap)
+ * decide who may use them, as for `registerUser`.
+ */
+
+export const DEFAULT_SETUP_LINK_SECONDS = 60 * 60 * 24 * 7;
+
+export type Account = Readonly<{
+  id: string;
+  username: string;
+  enabled: boolean;
+  roles: readonly string[];
+  createdAt: Date;
+  /** When the password was last set; null until the setup link is used. */
+  passwordSetAt: Date | null;
+  lastLoginAt: Date | null;
+  /** Expiry of the open setup link, or null when there is none. */
+  setupLinkExpiresAt: Date | null;
+}>;
+
+export type CreateAccountResult =
+  | Readonly<{ status: "created"; user: User }>
+  | Readonly<{ status: "username_taken" }>;
+
+export type SetupLink = Readonly<{ token: string; expiresAt: Date }>;
+
+export type RedeemSetupLinkResult =
+  Readonly<{ status: "ok"; user: User }> | Readonly<{ status: "invalid" }>;
+
+type Clock = Readonly<{ now?: () => Date }>;
+
+function toBase64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replaceAll("=", "");
+}
+
+async function tokenHash(token: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(token),
+  );
+  return toBase64Url(new Uint8Array(digest));
+}
+
+/**
+ * Creates an enabled User without a password and assigns `roles`, which must
+ * already exist (an application migration seeds them).
+ */
+export async function createAccount(
+  auth: AuthDatabase,
+  account: Readonly<{ username: string; roles: readonly string[] }>,
+): Promise<CreateAccountResult> {
+  return auth.transaction(async (sql) => {
+    const rows = await sql<Array<{ id: string }>>`
+      INSERT INTO users (username, enabled) VALUES (${account.username}, true)
+      ON CONFLICT (username) DO NOTHING
+      RETURNING id
+    `;
+    const row = rows[0];
+    if (!row) {
+      return { status: "username_taken" };
+    }
+    for (const role of account.roles) {
+      await sql`INSERT INTO user_roles (user_id, role_key) VALUES (${row.id}, ${role})`;
+    }
+    return { status: "created", user: { id: row.id } };
+  });
+}
+
+/**
+ * Issues the one-time link with which a User sets its password. A new link
+ * replaces the previous one; only the hash of the token is stored.
+ */
+export async function issueSetupLink(
+  auth: AuthDatabase,
+  user: User,
+  options: Clock & Readonly<{ lifetimeSeconds?: number }> = {},
+): Promise<SetupLink> {
+  const now = options.now?.() ?? new Date();
+  const lifetime = options.lifetimeSeconds ?? DEFAULT_SETUP_LINK_SECONDS;
+  const token = toBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+  const expiresAt = new Date(now.getTime() + lifetime * 1_000);
+  const hash = await tokenHash(token);
+  await auth.transaction(async (sql) => {
+    await sql`DELETE FROM password_setup_tokens WHERE user_id = ${user.id}`;
+    await sql`
+      INSERT INTO password_setup_tokens (token_hash, user_id, expires_at)
+      VALUES (${hash}, ${user.id}, ${expiresAt})
+    `;
+  });
+  return { token, expiresAt };
+}
+
+/**
+ * Sets the password of the link's User and uses the link up. It also ends
+ * every Auth Session of that User: whoever had the old password is signed
+ * out. A disabled User's link does not work.
+ */
+export async function redeemSetupLink(
+  auth: AuthDatabase,
+  token: string,
+  password: string,
+  options: Clock = {},
+): Promise<RedeemSetupLinkResult> {
+  const now = options.now?.() ?? new Date();
+  const [hash, pinHash] = await Promise.all([
+    tokenHash(token),
+    hashPin(password),
+  ]);
+  return auth.transaction(async (sql) => {
+    const rows = await sql<Array<{ user_id: string; expires_at: Date }>>`
+      DELETE FROM password_setup_tokens WHERE token_hash = ${hash}
+      RETURNING user_id, expires_at
+    `;
+    const row = rows[0];
+    if (!row || row.expires_at <= now) {
+      return { status: "invalid" };
+    }
+    const updated = await sql<Array<{ id: string }>>`
+      UPDATE users SET pin_hash = ${pinHash}, password_set_at = ${now}
+      WHERE id = ${row.user_id} AND enabled = true
+      RETURNING id
+    `;
+    if (!updated[0]) {
+      return { status: "invalid" };
+    }
+    await sql`DELETE FROM auth_sessions WHERE user_id = ${row.user_id}`;
+    return { status: "ok", user: { id: row.user_id } };
+  });
+}
+
+/** Whether the link is still open, for showing the form before it is used. */
+export async function setupLinkValid(
+  auth: AuthDatabase,
+  token: string,
+  options: Clock = {},
+): Promise<boolean> {
+  const now = options.now?.() ?? new Date();
+  const hash = await tokenHash(token);
+  const rows = await auth.transaction(
+    (sql) =>
+      sql<Array<{ valid: boolean }>>`
+        SELECT true AS valid
+        FROM password_setup_tokens t JOIN users u ON u.id = t.user_id
+        WHERE t.token_hash = ${hash} AND t.expires_at > ${now} AND u.enabled
+        LIMIT 1
+      `,
+  );
+  return rows.length > 0;
+}
+
+/** Every User with a username, oldest first. */
+export async function listAccounts(
+  auth: AuthDatabase,
+  options: Clock = {},
+): Promise<Account[]> {
+  const now = options.now?.() ?? new Date();
+  const rows = await auth.transaction(
+    (sql) =>
+      sql<
+        Array<{
+          id: string;
+          username: string;
+          enabled: boolean;
+          roles: string[];
+          created_at: Date;
+          password_set_at: Date | null;
+          last_login_at: Date | null;
+          setup_expires_at: Date | null;
+        }>
+      >`
+        SELECT u.id, u.username, u.enabled, u.created_at, u.password_set_at,
+          u.last_login_at,
+          coalesce(
+            (SELECT array_agg(r.role_key ORDER BY r.role_key)
+             FROM user_roles r WHERE r.user_id = u.id),
+            '{}'
+          ) AS roles,
+          (SELECT t.expires_at FROM password_setup_tokens t
+           WHERE t.user_id = u.id AND t.expires_at > ${now}) AS setup_expires_at
+        FROM users u
+        WHERE u.username IS NOT NULL
+        ORDER BY u.created_at, u.username
+      `,
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    username: row.username,
+    enabled: row.enabled,
+    roles: row.roles,
+    createdAt: row.created_at,
+    passwordSetAt: row.password_set_at,
+    lastLoginAt: row.last_login_at,
+    setupLinkExpiresAt: row.setup_expires_at,
+  }));
+}

@@ -8,7 +8,7 @@ import type { LoginResult, RegisterResult, User } from "./types.js";
 
 type CredentialRow = Readonly<{
   id: string;
-  pin_hash: string;
+  pin_hash: string | null;
   enabled: boolean;
 }>;
 
@@ -31,8 +31,8 @@ export async function registerUser(
       SELECT EXISTS (SELECT 1 FROM users LIMIT 1) AS exists
     `;
     const rows = await sql<Array<{ id: string; enabled: boolean }>>`
-      INSERT INTO users (username, pin_hash, enabled)
-      VALUES (${credentials.username}, ${pinHash}, ${!exists})
+      INSERT INTO users (username, pin_hash, enabled, password_set_at)
+      VALUES (${credentials.username}, ${pinHash}, ${!exists}, now())
       ON CONFLICT (username) DO NOTHING
       RETURNING id, enabled
     `;
@@ -65,12 +65,17 @@ export async function loginUser(
       `,
   );
   const row = rows[0];
-  if (!row || !(await verifyPin(pin, row.pin_hash))) {
+  // An account whose password was never set has no hash and no login.
+  if (!row?.pin_hash || !(await verifyPin(pin, row.pin_hash))) {
     return { status: "invalid_credentials" };
   }
-  return row.enabled
-    ? { status: "ok", user: { id: row.id } }
-    : { status: "disabled" };
+  if (!row.enabled) {
+    return { status: "disabled" };
+  }
+  await auth.transaction(async (sql) => {
+    await sql`UPDATE users SET last_login_at = now() WHERE id = ${row.id}`;
+  });
+  return { status: "ok", user: { id: row.id } };
 }
 
 export async function getUserById(

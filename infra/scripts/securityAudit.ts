@@ -20,6 +20,7 @@ export const FRAMEWORK_TABLES: ReadonlySet<string> = new Set([
   "auth_sessions",
   "external_identities",
   "oidc_authorization_attempts",
+  "password_setup_tokens",
   "chromatis_schema_migrations",
 ]);
 
@@ -40,6 +41,7 @@ const SENSITIVE_FRAMEWORK_TABLES: readonly string[] = [
   "auth_sessions",
   "external_identities",
   "oidc_authorization_attempts",
+  "password_setup_tokens",
 ];
 
 export function makeExecutor(

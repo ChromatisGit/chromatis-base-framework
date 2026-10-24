@@ -102,6 +102,29 @@ REVOKE ALL ON TABLE oidc_authorization_attempts FROM PUBLIC;
 GRANT SELECT, INSERT, DELETE ON oidc_authorization_attempts TO chromatis_auth;
 `;
 
+// Accounts an administrator creates: the User exists with a username before it
+// has a password, and sets the password through a one-time link. Only the
+// SHA-256 of a link's token is stored, so reading the table yields no link.
+const addPasswordSetup = `
+ALTER TABLE users DROP CONSTRAINT users_check;
+ALTER TABLE users ADD CONSTRAINT users_check
+  CHECK (pin_hash IS NULL OR username IS NOT NULL);
+ALTER TABLE users ADD COLUMN password_set_at timestamptz;
+ALTER TABLE users ADD COLUMN last_login_at timestamptz;
+UPDATE users SET password_set_at = created_at WHERE pin_hash IS NOT NULL;
+
+CREATE TABLE password_setup_tokens (
+  token_hash text PRIMARY KEY,
+  user_id uuid NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  expires_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+REVOKE ALL ON TABLE password_setup_tokens FROM PUBLIC;
+GRANT SELECT, INSERT, DELETE ON password_setup_tokens TO chromatis_auth;
+GRANT UPDATE (pin_hash, password_set_at, last_login_at) ON users TO chromatis_auth;
+`;
+
 export const authMigrations: readonly MigrationAsset[] = [
   {
     module: "chromatis-auth",
@@ -114,5 +137,11 @@ export const authMigrations: readonly MigrationAsset[] = [
     version: "1.1.0",
     description: "add OIDC authorization attempts",
     sql: addOidcAuthorizationAttempts,
+  },
+  {
+    module: "chromatis-auth",
+    version: "1.2.0",
+    description: "add password setup links and login times",
+    sql: addPasswordSetup,
   },
 ];

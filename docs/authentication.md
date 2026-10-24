@@ -17,6 +17,24 @@ current database session and returns the clearing `Set-Cookie` value. Use
 The wrapper accepts and returns standard Fetch `Request` and `Response` objects;
 the same handler is used on Bun and Cloudflare.
 
+## Accounts with a one-time link
+
+For applications whose operator creates accounts by hand (no self-registration),
+`createAccount(auth, { username, roles })` creates an enabled User without a
+password and assigns roles the application has seeded. `issueSetupLink(auth, user)`
+returns a random token (default lifetime `DEFAULT_SETUP_LINK_SECONDS`, 7 days) that
+the application turns into a link; only its SHA-256 is stored in
+`password_setup_tokens`, one per User, so a new link replaces the old one and
+"forgot password" is simply a new link. `redeemSetupLink(auth, token, password)`
+consumes the token, stores an Argon2id hash, and revokes every Auth Session of the
+User; disabled Users and expired tokens are rejected. `setupLinkValid` checks a
+token without using it up. `loginUser` records `last_login_at`; `listAccounts`
+returns every User with a username, their roles, when the password was set, the
+last login and the open link's expiry. None of these check a role: the caller
+(an admin page, a command-line bootstrap) decides who may use them. Disabling a
+User with `setUserEnabled(…, false)` makes its sessions resolve to `null`;
+`revokeAll(user)` also deletes them.
+
 ## Generic OIDC
 
 `createOidcProvider(configuration, dependencies)` implements the provider-neutral
