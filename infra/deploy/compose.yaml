@@ -1,0 +1,99 @@
+# One Chromatis application on one server: the app (Bun), PostgreSQL and Caddy.
+# Values come from `.env` next to this file (written by `chromatis deploy`, or
+# by hand from `env.example`); the app's own secrets from `app.env`.
+#
+#   deploy:    docker compose pull && docker compose up -d
+#   rollback:  IMAGE back to the previous tag in .env, then the same command
+#
+# `migrate` applies pending database migrations before the app starts; the
+# app refuses to start while the schema is behind.
+services:
+  app:
+    image: ${IMAGE:?set IMAGE in .env}
+    restart: unless-stopped
+    env_file:
+      - path: app.env
+        required: false
+    environment:
+      PUBLIC_URL: https://${DOMAIN:?set DOMAIN in .env}
+      # Caddy is the only client; the visitor's address is in X-Forwarded-For.
+      TRUST_PROXY: "1"
+      CHROMATIS_INSTANCE: /instance
+      DATABASE_URL: postgres://chromatis_runtime:${DATABASE_RUNTIME_PASSWORD:?}@db:5432/app
+      DATABASE_AUTH_URL: postgres://chromatis_auth:${DATABASE_AUTH_PASSWORD:?}@db:5432/app
+      # Per pool and process (runtime and auth each have one). Five covers two
+      # vCPUs; the load test decides, Postgres allows 100 connections in all.
+      DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-5}
+    volumes:
+      - ./instance:/instance:ro
+      - files:/files
+    ulimits:
+      # Every WebSocket is a file descriptor. The soft default (1024) would end
+      # a lesson start at a few dozen classes; the headroom keeps logs, the
+      # database and error responses working when sockets pile up.
+      nofile:
+        soft: 65536
+        hard: 65536
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  migrate:
+    image: ${IMAGE:?set IMAGE in .env}
+    command: ["bun", "migrate.js"]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgres://chromatis_runtime:${DATABASE_RUNTIME_PASSWORD:?}@db:5432/app
+      DATABASE_MIGRATION_URL: postgres://chromatis_owner:${DATABASE_OWNER_PASSWORD:?}@db:5432/app
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      DATABASE_OWNER_PASSWORD: ${DATABASE_OWNER_PASSWORD:?}
+      DATABASE_AUTH_PASSWORD: ${DATABASE_AUTH_PASSWORD:?}
+      DATABASE_RUNTIME_PASSWORD: ${DATABASE_RUNTIME_PASSWORD:?}
+    volumes:
+      - db:/var/lib/postgresql/data
+      # Runs once, when the volume is empty: the three Chromatis roles.
+      - ./postgres/init-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+    healthcheck:
+      # Over TCP: the temporary server that runs the init script has none.
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - ${HTTP_PORT:-80}:80
+      - ${HTTPS_PORT:-443}:443
+      - ${HTTPS_PORT:-443}:443/udp
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./instance/site:/srv/site:ro
+      - files:/srv/files:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    depends_on:
+      - app
+
+volumes:
+  db:
+  files:
+  caddy_data:
+  caddy_config:
