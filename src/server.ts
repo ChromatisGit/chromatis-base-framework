@@ -1,7 +1,7 @@
 import { DEV_OPEN_VARIABLE } from "./dev.js";
 import { createBunRuntimeHost } from "./stateful/bun.js";
 import type { RuntimeDefinition, StatefulRuntime } from "./stateful.js";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { withRequestScope } from "./request-scope.js";
 import { handleApi, type ApiTable } from "./api.js";
@@ -45,30 +45,47 @@ export function stringEnvironment(
   );
 }
 
-function staticFile(root: string, pathname: string): Response | undefined {
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(pathname);
-  } catch {
-    return undefined;
-  }
-  const requested = path.resolve(root, `.${decoded}`);
-  // A prerendered page is `<path>.html`, as Cloudflare's assets serve it.
-  const file = [requested, `${requested}.html`].find(
-    (candidate) => existsSync(candidate) && statSync(candidate).isFile(),
+/**
+ * Serves the built client files. The build output does not change while the
+ * server runs, so the file list is read once at startup and a request costs a
+ * lookup instead of file-system calls.
+ */
+export function createStaticFiles(
+  root: string,
+): (pathname: string) => Response | undefined {
+  const files = new Set(
+    existsSync(root)
+      ? readdirSync(root, { recursive: true, withFileTypes: true })
+          .filter((entry) => entry.isFile())
+          .map((entry) =>
+            path.relative(root, path.join(entry.parentPath, entry.name)),
+          )
+      : [],
   );
-  if (!requested.startsWith(`${root}${path.sep}`) || !file) {
-    return undefined;
-  }
-  return new Response(Bun.file(file), {
-    headers: {
-      "Cache-Control": pathname.startsWith("/assets/")
-        ? "public, max-age=31536000, immutable"
-        : file.endsWith(".html")
-          ? "no-cache"
-          : "public, max-age=3600",
-    },
-  });
+  return (pathname) => {
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(pathname).slice(1);
+    } catch {
+      return undefined;
+    }
+    // A prerendered page is `<path>.html`, as Cloudflare's assets serve it.
+    const file = [decoded, `${decoded}.html`].find((candidate) =>
+      files.has(candidate),
+    );
+    if (!file) {
+      return undefined;
+    }
+    return new Response(Bun.file(path.join(root, file)), {
+      headers: {
+        "Cache-Control": pathname.startsWith("/assets/")
+          ? "public, max-age=31536000, immutable"
+          : file.endsWith(".html")
+            ? "no-cache"
+            : "public, max-age=3600",
+      },
+    });
+  };
 }
 
 export async function startFrameworkBun<Service>(
@@ -84,6 +101,8 @@ export async function startFrameworkBun<Service>(
     setInterval(() => void hook.sweep?.(service), 60_000).unref();
   }
   const clientRoot = path.resolve(root, "build/client");
+  const staticFile = createStaticFiles(clientRoot);
+  const trustProxy = process.env.TRUST_PROXY === "1";
   const server = Bun.serve({
     port: Number(process.env.PORT ?? 3000),
     async fetch(request, serverRef) {
@@ -98,25 +117,20 @@ export async function startFrameworkBun<Service>(
       ) {
         return hook.socket(request, service);
       }
-      const asset =
-        request.method === "GET" ? staticFile(clientRoot, pathname) : undefined;
+      const asset = request.method === "GET" ? staticFile(pathname) : undefined;
       if (asset) {
         return asset;
       }
-      const headers = new Headers(request.headers);
-      const forwarded = request.headers
-        .get("x-forwarded-for")
-        ?.split(",")[0]
-        ?.trim();
-      const address = serverRef.requestIP(request)?.address ?? "local";
-      headers.set(
+      const forwarded = trustProxy
+        ? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+        : undefined;
+      // Bun's incoming headers are mutable: set in place, no copies. This
+      // also replaces a value the client sent itself.
+      request.headers.set(
         "x-chromatis-client",
-        process.env.TRUST_PROXY === "1" && forwarded ? forwarded : address,
+        forwarded || (serverRef.requestIP(request)?.address ?? "local"),
       );
-      const answer = await serveRoutes(
-        routes,
-        new Request(request, { headers }),
-      );
+      const answer = await serveRoutes(routes, request);
       if (answer) {
         return answer;
       }
