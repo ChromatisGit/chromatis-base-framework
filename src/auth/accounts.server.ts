@@ -161,26 +161,26 @@ export async function setupLinkValid(
   return rows.length > 0;
 }
 
-/** Every User with a username, oldest first. */
-export async function listAccounts(
+type AccountRow = Readonly<{
+  id: string;
+  username: string;
+  enabled: boolean;
+  roles: string[];
+  created_at: Date;
+  password_set_at: Date | null;
+  last_login_at: Date | null;
+  setup_expires_at: Date | null;
+}>;
+
+/** Users with a username: all of them, or the one with `id`. */
+async function accountRows(
   auth: AuthDatabase,
-  options: Clock = {},
+  now: Date,
+  id: string | null,
 ): Promise<Account[]> {
-  const now = options.now?.() ?? new Date();
   const rows = await auth.transaction(
     (sql) =>
-      sql<
-        Array<{
-          id: string;
-          username: string;
-          enabled: boolean;
-          roles: string[];
-          created_at: Date;
-          password_set_at: Date | null;
-          last_login_at: Date | null;
-          setup_expires_at: Date | null;
-        }>
-      >`
+      sql<AccountRow[]>`
         SELECT u.id, u.username, u.enabled, u.created_at, u.password_set_at,
           u.last_login_at,
           coalesce(
@@ -192,6 +192,7 @@ export async function listAccounts(
            WHERE t.user_id = u.id AND t.expires_at > ${now}) AS setup_expires_at
         FROM users u
         WHERE u.username IS NOT NULL
+          AND (${id}::uuid IS NULL OR u.id = ${id}::uuid)
         ORDER BY u.created_at, u.username
       `,
   );
@@ -205,4 +206,26 @@ export async function listAccounts(
     lastLoginAt: row.last_login_at,
     setupLinkExpiresAt: row.setup_expires_at,
   }));
+}
+
+/** Every User with a username, oldest first. */
+export function listAccounts(
+  auth: AuthDatabase,
+  options: Clock = {},
+): Promise<Account[]> {
+  return accountRows(auth, options.now?.() ?? new Date(), null);
+}
+
+/** The account of a User, or null when it has no username. */
+export async function getAccount(
+  auth: AuthDatabase,
+  user: User,
+  options: Clock = {},
+): Promise<Account | null> {
+  const [account] = await accountRows(
+    auth,
+    options.now?.() ?? new Date(),
+    user.id,
+  );
+  return account ?? null;
 }

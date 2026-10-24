@@ -29,7 +29,7 @@ the application turns into a link; only its SHA-256 is stored in
 consumes the token, stores an Argon2id hash, and revokes every Auth Session of the
 User; disabled Users and expired tokens are rejected. `setupLinkValid` checks a
 token without using it up. `loginUser` records `last_login_at`; `listAccounts`
-returns every User with a username, their roles, when the password was set, the
+(and `getAccount` for one User) returns every User with a username, their roles, when the password was set, the
 last login and the open link's expiry. None of these check a role: the caller
 (an admin page, a command-line bootstrap) decides who may use them. Disabling a
 User with `setUserEnabled(…, false)` makes its sessions resolve to `null`;

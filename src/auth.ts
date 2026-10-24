@@ -1,6 +1,7 @@
 export {
   createAccount,
   DEFAULT_SETUP_LINK_SECONDS,
+  getAccount,
   issueSetupLink,
   listAccounts,
   redeemSetupLink,

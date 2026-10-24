@@ -8,6 +8,7 @@ import { createDatabaseOidcAuthorizationAttemptStore } from "../../src/auth/oidc
 import { createAuthDatabase } from "../../src/auth/database.server.js";
 import {
   createAccount,
+  getAccount,
   issueSetupLink,
   listAccounts,
   redeemSetupLink,
@@ -393,6 +394,7 @@ test("an account sets its password once through a link that expires", async () =
     setupLinkExpiresAt: null,
   });
   expect(account?.lastLoginAt).toBeInstanceOf(Date);
+  expect(await getAccount(auth, created.user)).toEqual(account ?? null);
   const stored = await ownerSql<Array<{ token_hash: string }>>`
     SELECT token_hash FROM password_setup_tokens
   `;
