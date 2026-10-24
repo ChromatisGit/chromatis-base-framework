@@ -103,6 +103,7 @@ export interface DatabaseStartupOptions {
   readonly runtime: DatabaseRuntime;
   readonly environment: DatabaseEnvironment;
   readonly applicationRoot?: string;
+  readonly poolSize?: number;
 }
 
 function discoverApplicationMigrations(
@@ -120,6 +121,7 @@ export async function startDatabase(
   const database = createDatabase(options.databaseUrl, {
     runtime: options.runtime,
     environment: options.environment,
+    ...(options.poolSize !== undefined ? { poolSize: options.poolSize } : {}),
     ...(options.migrationDatabaseUrl
       ? { migrationConnectionString: options.migrationDatabaseUrl }
       : {}),

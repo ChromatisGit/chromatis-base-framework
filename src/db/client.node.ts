@@ -15,6 +15,15 @@ import type {
   DbSql,
 } from "./types.js";
 
+/**
+ * Connections per pool unless the application chooses. The app and Postgres
+ * share a small server (2 vCPUs at the start), where more connections than
+ * about twice the cores only queue inside Postgres; postgres.js would open
+ * 10. Connections open lazily, so this is an upper bound. The load test
+ * decides the final value.
+ */
+export const DEFAULT_POOL_SIZE = 5;
+
 const localPools = new Map<string, ReturnType<typeof postgres>>();
 
 export async function closeNodeDatabasePools(): Promise<void> {
@@ -23,13 +32,20 @@ export async function closeNodeDatabasePools(): Promise<void> {
   await Promise.all(pools.map((pool) => pool.end()));
 }
 
-function getPool(connectionString: string): ReturnType<typeof postgres> {
-  const existing = localPools.get(connectionString);
+function getPool(
+  connectionString: string,
+  size: number,
+): ReturnType<typeof postgres> {
+  if (!Number.isInteger(size) || size < 1) {
+    throw new Error("[db] The pool size must be a positive integer.");
+  }
+  const key = `${size}:${connectionString}`;
+  const existing = localPools.get(key);
   if (existing) {
     return existing;
   }
-  const pool = postgres(connectionString);
-  localPools.set(connectionString, pool);
+  const pool = postgres(connectionString, { max: size });
+  localPools.set(key, pool);
   return pool;
 }
 
@@ -79,8 +95,9 @@ export function createNodeAdapter(
   connectionString: string,
   migrationConnectionString?: string,
   role: string = DATABASE_RUNTIME_ROLE,
+  poolSize: number = DEFAULT_POOL_SIZE,
 ): DbAdapter {
-  const pool = getPool(connectionString);
+  const pool = getPool(connectionString, poolSize);
   let runtimeRoleCheck: Promise<void> | undefined;
   const ensureSafeRuntimeRole = (): Promise<void> => {
     runtimeRoleCheck ??= assertSafeRole(
@@ -125,6 +142,7 @@ export function createNodeAdapter(
                     "[db] DATABASE_MIGRATION_URL is required to apply migrations.",
                   );
                 })(),
+              poolSize,
             )
           : pool;
       const setupQuery = makeSetupExecutor(

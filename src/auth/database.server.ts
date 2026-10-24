@@ -18,6 +18,8 @@ export interface AuthDatabaseOptions {
   readonly runtime: DatabaseRuntime;
   /** The runtime connection string; the two must use different roles. */
   readonly runtimeConnectionString?: string;
+  /** Upper bound of connections in the Bun pool, as for `createDatabase`. */
+  readonly poolSize?: number;
 }
 
 function username(connectionString: string, label: string): string {
@@ -50,6 +52,11 @@ export function createAuthDatabase(
   const adapter =
     options.runtime === "cloudflare"
       ? createWorkerAdapter(connectionString, undefined, DATABASE_AUTH_ROLE)
-      : createNodeAdapter(connectionString, undefined, DATABASE_AUTH_ROLE);
+      : createNodeAdapter(
+          connectionString,
+          undefined,
+          DATABASE_AUTH_ROLE,
+          options.poolSize,
+        );
   return { transaction: (operation) => adapter.withPublicTx(operation) };
 }

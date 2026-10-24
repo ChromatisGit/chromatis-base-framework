@@ -25,6 +25,11 @@ export interface DatabaseOptions {
   readonly runtime: DatabaseRuntime;
   readonly environment: DatabaseEnvironment;
   readonly migrationConnectionString?: string;
+  /**
+   * Upper bound of connections in the Bun pool (default `DEFAULT_POOL_SIZE`,
+   * 5). The Cloudflare runtime ignores it.
+   */
+  readonly poolSize?: number;
 }
 
 type DatabaseSetup = (migrations: readonly MigrationAsset[]) => Promise<void>;
@@ -107,7 +112,12 @@ export function createDatabase(
   const adapter: DbAdapter =
     options.runtime === "cloudflare"
       ? createWorkerAdapter(connectionString, options.migrationConnectionString)
-      : createNodeAdapter(connectionString, options.migrationConnectionString);
+      : createNodeAdapter(
+          connectionString,
+          options.migrationConnectionString,
+          undefined,
+          options.poolSize,
+        );
 
   const publicSQL = createSingleQuerySql((operation) =>
     adapter.withPublicTx(operation),

@@ -33,6 +33,16 @@ let runtimeUrl = "";
 let authUrl = "";
 let migrationUrl = "";
 
+/** The application's database as a local server opens it. */
+function localDatabase(poolSize?: number) {
+  return createDatabase(runtimeUrl, {
+    runtime: "bun",
+    environment: "local",
+    migrationConnectionString: migrationUrl,
+    ...(poolSize === undefined ? {} : { poolSize }),
+  });
+}
+
 function docker(args: string[], allowFailure = false): string {
   const result = spawnSync("docker", args, { encoding: "utf8" });
   if (result.status !== 0 && !allowFailure) {
@@ -179,11 +189,7 @@ afterAll(async () => {
 
 describe("PostgreSQL database contract", () => {
   test("runtime queries and migration DDL use distinct safe roles", async () => {
-    const database = createDatabase(runtimeUrl, {
-      runtime: "bun",
-      environment: "local",
-      migrationConnectionString: migrationUrl,
-    });
+    const database = localDatabase();
     const [runtimeRole] = await database.publicSQL<
       Array<{ role_name: string; superuser: boolean; bypass_rls: boolean }>
     >`
@@ -219,11 +225,7 @@ describe("PostgreSQL database contract", () => {
   });
 
   test("RLS uses only transaction-local app.user_id and rolls back failures", async () => {
-    const database = createDatabase(runtimeUrl, {
-      runtime: "bun",
-      environment: "local",
-      migrationConnectionString: migrationUrl,
-    });
+    const database = localDatabase();
     await database.userSQL({ id: userA })`
       INSERT INTO courses (id, user_id, title)
       VALUES ('10000000-0000-4000-8000-000000000001', ${userA}::uuid, 'Visible')
@@ -273,14 +275,11 @@ describe("PostgreSQL database contract", () => {
   });
 });
 
-describe("PostgreSQL prepared statements", () => {
+describe("PostgreSQL connections", () => {
+  const database = () => localDatabase(2);
+
   test("application SQL and the RLS context run as prepared statements", async () => {
-    const database = createDatabase(runtimeUrl, {
-      runtime: "bun",
-      environment: "local",
-      migrationConnectionString: migrationUrl,
-    });
-    const prepared = await database.userTransaction(
+    const prepared = await database().userTransaction(
       { id: userA },
       async (sql) => {
         await sql`SELECT id FROM courses WHERE title = ${"probe"}`;
@@ -289,19 +288,31 @@ describe("PostgreSQL prepared statements", () => {
         `;
       },
     );
-    const statements = prepared.map((row) => row.statement);
-    expect(statements).toContain("SELECT id FROM courses WHERE title = $1");
-    expect(statements).toContain("SELECT set_config('app.user_id', $1, true)");
+    expect(prepared.map((row) => row.statement)).toEqual(
+      expect.arrayContaining([
+        "SELECT id FROM courses WHERE title = $1",
+        "SELECT set_config('app.user_id', $1, true)",
+      ]),
+    );
+  });
+
+  test("the pool opens no more connections than its size", async () => {
+    const sql = database().publicSQL;
+    const backends = await Promise.all(
+      Array.from({ length: 6 }, async () => {
+        const [row] = await sql<Array<{ pid: number }>>`
+          SELECT pg_backend_pid() AS pid, pg_sleep(0.05)
+        `;
+        return row?.pid;
+      }),
+    );
+    expect(new Set(backends).size).toBe(2);
   });
 });
 
 describe("SQL injection payloads stay values", () => {
   test("payloads cannot alter app.user_id or reach another User's rows", async () => {
-    const database = createDatabase(runtimeUrl, {
-      runtime: "bun",
-      environment: "local",
-      migrationConnectionString: migrationUrl,
-    });
+    const database = localDatabase();
     await database.userSQL({ id: userB })`
       INSERT INTO courses (id, user_id, title)
       VALUES ('10000000-0000-4000-8000-0000000000b1', ${userB}::uuid, 'Secret of B')
@@ -368,11 +379,7 @@ describe("SQL injection payloads stay values", () => {
 
 describe("PostgreSQL auth and startup", () => {
   test("auth grants support required flows without exposing unneeded columns", async () => {
-    const database = createDatabase(runtimeUrl, {
-      runtime: "bun",
-      environment: "local",
-      migrationConnectionString: migrationUrl,
-    });
+    const database = localDatabase();
     const auth = createAuthDatabase(authUrl, { runtime: "bun" });
     const registered = await registerUser(auth, {
       username: "alice",

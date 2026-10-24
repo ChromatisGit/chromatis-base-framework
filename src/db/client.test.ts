@@ -55,3 +55,15 @@ describe("database credentials", () => {
     ).not.toThrow();
   });
 });
+
+describe("pool size", () => {
+  test.each([0, -1, 1.5])("rejects %p connections", (poolSize) => {
+    expect(() =>
+      createDatabase(runtimeUrl, {
+        runtime: "bun",
+        environment: "production",
+        poolSize,
+      }),
+    ).toThrow("pool size must be a positive integer");
+  });
+});
