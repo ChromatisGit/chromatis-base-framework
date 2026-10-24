@@ -33,3 +33,16 @@ export function requestMemo<T>(key: string, make: () => T): T {
   }
   return scope.get(key) as T;
 }
+
+/**
+ * Drops what this request memoised under keys starting with `prefix`, for
+ * example after the request itself changed what the value was read from.
+ */
+export function forgetRequestMemo(prefix: string): void {
+  const scope = storage.getStore();
+  for (const key of scope?.keys() ?? []) {
+    if (key.startsWith(prefix)) {
+      scope?.delete(key);
+    }
+  }
+}

@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { requestMemo, withRequestScope } from "./request-scope.js";
+import {
+  forgetRequestMemo,
+  requestMemo,
+  withRequestScope,
+} from "./request-scope.js";
 
 describe("requestMemo", () => {
   test("computes once per request and key, across awaits", async () => {
@@ -33,5 +37,17 @@ describe("requestMemo", () => {
     requestMemo("a", () => ++calls);
     requestMemo("a", () => ++calls);
     expect(calls).toBe(2);
+  });
+
+  test("forgets keys by prefix within the request", () => {
+    let calls = 0;
+    const make = () => ++calls;
+    const values = withRequestScope(() => {
+      requestMemo("session:1", make);
+      requestMemo("other", make);
+      forgetRequestMemo("session:");
+      return [requestMemo("session:1", make), requestMemo("other", make)];
+    });
+    expect(values).toEqual([3, 2]);
   });
 });

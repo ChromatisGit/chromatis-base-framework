@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { withRequestScope } from "../request-scope.js";
 import type { AuthDatabase } from "./database.server.js";
 import { requireUser, withAuthentication } from "./request-context.js";
 import { createSessionManager } from "./session.server.js";
@@ -169,4 +170,36 @@ test("the session cookie contains only the opaque session id", async () => {
   expect(created.cookie).toContain("HttpOnly");
   expect(created.cookie).toContain("Secure");
   expect(created.cookie).toContain("SameSite=lax");
+});
+
+test("a session is looked up once per request and again after revoking", async () => {
+  const queries: string[] = [];
+  const database = {
+    async transaction(operation: (sql: unknown) => Promise<unknown>) {
+      const sql = (strings: TemplateStringsArray) => {
+        const text = strings.join("?").trim();
+        queries.push(text.split(/\s+/)[0] ?? "");
+        return Promise.resolve(
+          text.startsWith("SELECT")
+            ? [{ id: sessionA, user_id: userA, expires_at: new Date(0) }]
+            : [],
+        );
+      };
+      return operation(sql);
+    },
+  } as unknown as AuthDatabase;
+  const manager = createSessionManager({ auth: database, cookieName: "sid" });
+  const request = () =>
+    new Request("https://app.test", {
+      headers: { cookie: `sid=${sessionA}` },
+    });
+
+  await withRequestScope(async () => {
+    expect((await manager.resolve(request()))?.user).toEqual({ id: userA });
+    expect((await manager.resolve(request()))?.user).toEqual({ id: userA });
+    await manager.revoke(sessionA);
+    await manager.resolve(request());
+  });
+  await withRequestScope(() => manager.resolve(request()));
+  expect(queries).toEqual(["SELECT", "DELETE", "SELECT", "SELECT"]);
 });

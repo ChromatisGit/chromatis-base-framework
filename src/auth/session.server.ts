@@ -5,6 +5,7 @@ import {
 } from "./cookie.server.js";
 import type { SessionCookieConfig } from "./cookie.server.js";
 import type { AuthDatabase } from "./database.server.js";
+import { forgetRequestMemo, requestMemo } from "../request-scope.js";
 import type { Session, User } from "./types.js";
 
 const DEFAULT_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
@@ -42,10 +43,30 @@ export function createSessionManager(
     sameSite: "lax",
     path: "/",
   };
+  // Resolved once per request; never cached across requests, so a revoked
+  // session stops working with the next request.
+  const memoPrefix = `chromatis.session:${options.cookieName}:`;
+  const lookup = async (id: string): Promise<Session | null> => {
+    const rows = await options.auth.transaction(
+      (sql) =>
+        sql<Array<{ id: string; user_id: string; expires_at: Date }>>`
+          SELECT s.id, s.user_id, s.expires_at
+          FROM auth_sessions s
+          JOIN users u ON u.id = s.user_id
+          WHERE s.id = ${id} AND s.expires_at > ${now()} AND u.enabled = true
+          LIMIT 1
+        `,
+    );
+    const row = rows[0];
+    return row
+      ? { id: row.id, user: { id: row.user_id }, expiresAt: row.expires_at }
+      : null;
+  };
   const revoke = async (sessionId: string): Promise<void> => {
     await options.auth.transaction(async (sql) => {
       await sql`DELETE FROM auth_sessions WHERE id = ${sessionId}`;
     });
+    forgetRequestMemo(`${memoPrefix}${sessionId}`);
   };
 
   return {
@@ -68,30 +89,14 @@ export function createSessionManager(
       if (!id || !UUID_PATTERN.test(id)) {
         return null;
       }
-      const rows = await options.auth.transaction(
-        (sql) =>
-          sql<Array<{ id: string; user_id: string; expires_at: Date }>>`
-            SELECT s.id, s.user_id, s.expires_at
-            FROM auth_sessions s
-            JOIN users u ON u.id = s.user_id
-            WHERE s.id = ${id} AND s.expires_at > ${now()} AND u.enabled = true
-            LIMIT 1
-          `,
-      );
-      const row = rows[0];
-      return row
-        ? {
-            id: row.id,
-            user: { id: row.user_id },
-            expiresAt: row.expires_at,
-          }
-        : null;
+      return requestMemo(`${memoPrefix}${id}`, () => lookup(id));
     },
     revoke,
     async revokeAll(user) {
       await options.auth.transaction(async (sql) => {
         await sql`DELETE FROM auth_sessions WHERE user_id = ${user.id}`;
       });
+      forgetRequestMemo(memoPrefix);
     },
     async logout(session) {
       if (session) {
