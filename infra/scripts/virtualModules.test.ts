@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { generateArtifacts, loadHook } from "./application.js";
 import { embedArtifacts, prepareArtifacts } from "./artifacts.js";
@@ -81,6 +81,19 @@ describe("virtual modules", () => {
       courses: ["algebra"],
       publicUrl: "https://example.org",
     });
+  });
+
+  test("a server bundle whose code imports styles is one file", async () => {
+    const { root } = await prepared();
+    const entry = path.join(root, ".chromatis/build/styled.ts");
+    await Bun.write(path.join(root, ".chromatis/build/look.css"), "a{}");
+    await Bun.write(entry, 'import "./look.css";\nconsole.log("styled");\n');
+    const outfile = path.join(root, ".chromatis/image/server.js");
+    await bundleForBun(root, entry, outfile);
+    expect(readdirSync(path.dirname(outfile))).toEqual(["server.js"]);
+    expect(
+      Bun.spawnSync(["bun", outfile], { stdout: "pipe" }).stdout.toString(),
+    ).toBe("styled\n");
   });
 
   test("config that JSON cannot carry unchanged is rejected", () => {

@@ -144,7 +144,11 @@ export function registerVirtualModules(root: string): void {
   });
 }
 
-/** `bun build` with the virtual modules resolved (the CLI cannot take a plugin). */
+/**
+ * `bun build` with the virtual modules resolved (the CLI cannot take a plugin).
+ * Only the JavaScript entry is written: styles and fonts that shared UI code
+ * imports end up as extra outputs the server never reads.
+ */
 export async function bundleForBun(
   root: string,
   entry: string,
@@ -153,13 +157,15 @@ export async function bundleForBun(
   const result = await Bun.build({
     entrypoints: [entry],
     target: "bun",
-    outdir: path.dirname(outfile),
-    naming: path.basename(outfile),
     plugins: [virtualModulePlugin(root)],
+    throw: false,
   });
-  if (!result.success) {
+  const output = result.outputs.find(({ kind }) => kind === "entry-point");
+  if (!result.success || !output) {
     throw new Error(
       `bundling ${path.basename(entry)} failed:\n${result.logs.map(String).join("\n")}`,
     );
   }
+  mkdirSync(path.dirname(outfile), { recursive: true });
+  await Bun.write(outfile, output);
 }
