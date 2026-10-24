@@ -20,11 +20,15 @@ type BunSocket = {
   data: SocketData;
   send(data: string): unknown;
   close(code?: number, reason?: string): unknown;
+  subscribe(topic: string): void;
+  unsubscribe(topic: string): void;
+  publish(topic: string, data: string): unknown;
 };
 
 /** The subset of `Bun.serve`'s server the host needs. */
 export interface BunUpgradeServer {
   upgrade(request: Request, options: { data: SocketData }): boolean;
+  publish(topic: string, data: string): unknown;
 }
 
 /** Handlers to pass as `websocket` to `Bun.serve`. */
@@ -44,27 +48,41 @@ export interface BunRuntimeHost extends StatefulRuntime {
 const key = (address: RuntimeAddress): string =>
   `${address.kind}/${address.id}`;
 
+/*
+ * Broadcasts go through Bun's pub/sub: one topic per instance, so a frame is
+ * handed to Bun once and fanned out natively instead of once per socket. A
+ * new topic per instance keeps a re-created address apart from the old one.
+ */
+type Instances = ReadonlyMap<
+  string,
+  { instance: RuntimeInstance; topic: string }
+>;
+
 function createWebSocketHandlers(
-  instances: ReadonlyMap<string, RuntimeInstance>,
+  instances: Instances,
 ): BunRuntimeWebSocketHandlers {
   return {
     open(socket) {
-      const instance = instances.get(socket.data.key);
-      if (!instance || instance.isClosed) {
+      const running = instances.get(socket.data.key);
+      if (!running || running.instance.isClosed) {
         socket.close(1011, "unknown instance");
         return;
       }
+      const { instance, topic } = running;
       const { id } = instance.attach(
         {
           send: (data) => void socket.send(data),
           close: (code, reason) => void socket.close(code, reason),
+          join: () => socket.subscribe(topic),
+          leave: () => socket.unsubscribe(topic),
+          publishToOthers: (data) => void socket.publish(topic, data),
         },
         socket.data.params,
       );
       socket.data.connectionId = id;
     },
     message(socket, message) {
-      const instance = instances.get(socket.data.key);
+      const instance = instances.get(socket.data.key)?.instance;
       const id = socket.data.connectionId;
       if (!instance || !id) {
         return;
@@ -78,7 +96,7 @@ function createWebSocketHandlers(
     close(socket) {
       const id = socket.data.connectionId;
       if (id) {
-        void instances.get(socket.data.key)?.disconnect(id);
+        void instances.get(socket.data.key)?.instance.disconnect(id);
       }
     },
   };
@@ -89,13 +107,16 @@ export function createBunRuntimeHost(
   definitions: readonly RuntimeDefinition[],
 ): BunRuntimeHost {
   const known = indexDefinitions(definitions);
-  const instances = new Map<string, RuntimeInstance>();
+  const instances = new Map<
+    string,
+    { instance: RuntimeInstance; topic: string }
+  >();
   const pending = new Set<string>();
   let server: BunUpgradeServer | undefined;
 
   function find(address: RuntimeAddress): RuntimeInstance | undefined {
     assertValidAddress(address);
-    const instance = instances.get(key(address));
+    const instance = instances.get(key(address))?.instance;
     return instance?.isClosed ? undefined : instance;
   }
 
@@ -126,17 +147,19 @@ export function createBunRuntimeHost(
       }
       pending.add(id);
       try {
+        const topic = `${id}#${crypto.randomUUID()}`;
         const instance = await RuntimeInstance.start(
           definition,
           address,
           init,
           () => {
-            if (instances.get(id) === instance) {
+            if (instances.get(id)?.instance === instance) {
               instances.delete(id);
             }
           },
+          (data) => void server?.publish(topic, data),
         );
-        instances.set(id, instance);
+        instances.set(id, { instance, topic });
       } finally {
         pending.delete(id);
       }

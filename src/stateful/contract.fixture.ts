@@ -43,7 +43,11 @@ export const roomDefinition: RuntimeDefinition = {
         if (data === "boom") {
           throw new Error("handler failure");
         }
-        context.broadcast(`${connection.params.name ?? "?"}:${data}`);
+        const quiet = data.startsWith("quiet:");
+        context.broadcast(
+          `${connection.params.name ?? "?"}:${data}`,
+          quiet ? { except: connection } : undefined,
+        );
       },
       onDisconnect(connection) {
         log.push(`left:${connection.params.name ?? "?"}`);

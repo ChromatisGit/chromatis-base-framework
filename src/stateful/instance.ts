@@ -13,10 +13,22 @@ import type {
 export interface ConnectionTransport {
   send(data: string): void;
   close(code: number, reason: string): void;
+  /**
+   * Hosts that fan out themselves (Bun topics) keep a group per instance:
+   * a connection is a member exactly while it receives broadcasts.
+   */
+  join?(): void;
+  leave?(): void;
+  /** Sends to every other member of the group. */
+  publishToOthers?(data: string): void;
 }
+
+/** Sends one frame to every member of the instance's group. */
+export type Publish = (data: string) => void;
 
 type Entry = {
   readonly connection: RealtimeConnection;
+  readonly transport: ConnectionTransport;
   attached: boolean;
   ended: boolean;
 };
@@ -38,6 +50,7 @@ export class RuntimeInstance {
   private constructor(
     readonly address: RuntimeAddress,
     private readonly onFinished: () => void,
+    private readonly publish: Publish | undefined,
   ) {
     this.log = createLogger({
       requestId: "runtime",
@@ -54,6 +67,9 @@ export class RuntimeInstance {
           .filter((entry) => entry.attached && !entry.ended)
           .map((entry) => entry.connection),
       broadcast: (data, options) => {
+        if (this.fanOut(data, options?.except)) {
+          return;
+        }
         for (const connection of this.context.connections()) {
           if (connection !== options?.except) {
             connection.send(data);
@@ -66,13 +82,18 @@ export class RuntimeInstance {
     };
   }
 
+  /**
+   * `publish` lets the host send a broadcast once to its group instead of
+   * once per connection; the frame is then serialised a single time.
+   */
   static async start(
     definition: RuntimeDefinition,
     address: RuntimeAddress,
     init: RuntimeJson,
     onFinished: () => void,
+    publish?: Publish,
   ): Promise<RuntimeInstance> {
-    const instance = new RuntimeInstance(address, onFinished);
+    const instance = new RuntimeInstance(address, onFinished, publish);
     instance.behavior = await definition.create(instance.context, init);
     return instance;
   }
@@ -98,6 +119,7 @@ export class RuntimeInstance {
   ): { id: string; ready: Promise<boolean> } {
     const id = crypto.randomUUID();
     const entry: Entry = {
+      transport,
       attached: false,
       ended: false,
       connection: {
@@ -121,6 +143,9 @@ export class RuntimeInstance {
       }
       // Visible to the instance (e.g. broadcast) while onConnect runs.
       entry.attached = true;
+      if (!entry.ended) {
+        transport.join?.();
+      }
       try {
         await this.behavior.onConnect?.(entry.connection);
       } catch (error) {
@@ -194,6 +219,7 @@ export class RuntimeInstance {
       return;
     }
     entry.ended = true;
+    transport.leave?.();
     transport.close(code, reason);
     if (entry.attached) {
       void this.enqueue(() => this.finishEntry(entry));
@@ -206,6 +232,7 @@ export class RuntimeInstance {
     const wasAttached = entry.attached;
     entry.ended = true;
     entry.attached = false;
+    entry.transport.leave?.();
     if (!this.entries.delete(entry.connection.id) || !wasAttached) {
       return;
     }
@@ -214,6 +241,29 @@ export class RuntimeInstance {
     } catch (error) {
       this.logFailure("onDisconnect failed", error);
     }
+  }
+
+  /** Broadcasts through the host's group; false when it cannot. */
+  private fanOut(data: string, except?: RealtimeConnection): boolean {
+    if (!this.publish) {
+      return false;
+    }
+    const excluded = except && this.entries.get(except.id);
+    if (
+      !excluded ||
+      excluded.connection !== except ||
+      !excluded.attached ||
+      excluded.ended
+    ) {
+      // Whoever is excluded is not in the group anyway.
+      this.publish(data);
+      return true;
+    }
+    if (!excluded.transport.publishToOthers) {
+      return false;
+    }
+    excluded.transport.publishToOthers(data);
+    return true;
   }
 
   private assertOpen(): void {

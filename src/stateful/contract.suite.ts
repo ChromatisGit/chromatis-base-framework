@@ -194,6 +194,24 @@ function realtimeTests(ctx: Context): void {
     expect(info.connections).toBe(2);
   });
 
+  test("broadcasts to everyone except the excluded connection", async () => {
+    await ctx.runtime.create(room("a"));
+    const ann = await ctx.connect("a", "ann");
+    await until(() => ann.messages.includes("joined:ann"), "ann join");
+    const bob = await ctx.connect("a", "bob");
+    await until(() => ann.messages.includes("joined:bob"), "bob join");
+
+    ann.send("quiet:psst");
+    ann.send("loud");
+    await until(
+      () =>
+        ann.messages.includes("ann:loud") && bob.messages.includes("ann:loud"),
+      "broadcast",
+    );
+    expect(bob.messages).toContain("ann:quiet:psst");
+    expect(ann.messages).not.toContain("ann:quiet:psst");
+  });
+
   test("reports disconnects to the instance", async () => {
     await ctx.runtime.create(room("a"));
     const ann = await ctx.connect("a", "ann");
