@@ -2,7 +2,48 @@ const ITERATIONS = 100_000;
 const KEY_LENGTH = 32;
 const SALT_LENGTH = 16;
 
+type BunPassword = Readonly<{
+  hash(password: string, options: { algorithm: "argon2id" }): Promise<string>;
+  verify(password: string, hash: string): Promise<boolean>;
+}>;
+
+/** `Bun.password`; undefined on Cloudflare Workers. */
+function bunPassword(): BunPassword | undefined {
+  return (globalThis as { Bun?: { password?: BunPassword } }).Bun?.password;
+}
+
+/**
+ * Hashes with Argon2id (PHC string `$argon2id$...`). PBKDF2 is only the
+ * fallback of the frozen Cloudflare runtime, which has no `Bun.password`.
+ */
 export async function hashPin(pin: string): Promise<string> {
+  const password = bunPassword();
+  if (password) {
+    return password.hash(pin, { algorithm: "argon2id" });
+  }
+  return hashPbkdf2(pin);
+}
+
+/** Verifies Argon2id hashes and the PBKDF2 hashes written before them. */
+export async function verifyPin(
+  pin: string,
+  storedHash: string,
+): Promise<boolean> {
+  if (storedHash.startsWith("pbkdf2:")) {
+    return verifyPbkdf2(pin, storedHash);
+  }
+  const password = bunPassword();
+  if (!password || !storedHash.startsWith("$argon2id$")) {
+    return false;
+  }
+  try {
+    return await password.verify(pin, storedHash);
+  } catch {
+    return false;
+  }
+}
+
+async function hashPbkdf2(pin: string): Promise<string> {
   const salt = crypto.getRandomValues(
     new Uint8Array(SALT_LENGTH),
   ) as Uint8Array<ArrayBuffer>;
@@ -10,10 +51,7 @@ export async function hashPin(pin: string): Promise<string> {
   return `pbkdf2:${ITERATIONS}:${toHex(salt)}:${toHex(new Uint8Array(key))}`;
 }
 
-export async function verifyPin(
-  pin: string,
-  storedHash: string,
-): Promise<boolean> {
+async function verifyPbkdf2(pin: string, storedHash: string): Promise<boolean> {
   const parts = storedHash.split(":");
   if (parts[0] !== "pbkdf2" || parts.length !== 4) {
     return false;
