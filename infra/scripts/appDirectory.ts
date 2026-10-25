@@ -56,6 +56,14 @@ export function documentHtml(document: AppDocument | undefined): string {
           `<link rel="icon"${iconType ? ` type="${iconType}"` : ""} href="${escapeHtml(icon)}" />`,
         ]
       : []),
+    ...(document?.manifest
+      ? [`<link rel="manifest" href="${escapeHtml(document.manifest)}" />`]
+      : []),
+    ...(document?.themeColor
+      ? [
+          `<meta name="theme-color" content="${escapeHtml(document.themeColor)}" />`,
+        ]
+      : []),
     ...(document?.colorModeKey
       ? [`<script>${colorModeInitScript(document.colorModeKey)}</script>`]
       : []),
@@ -111,6 +119,7 @@ export function appModule(app: ResolvedApplication): string {
     "export const app: AppDefinition = {",
     root ? "  root," : "  root: {},",
     ...(rootServer ? ["  rootServer: true,"] : []),
+    ...(document?.serviceWorker ? ["  serviceWorker: true,"] : []),
     `  title: ${JSON.stringify(document?.title ?? "")},`,
     "  routes: [",
     ...clientRoutes(routes, "    "),

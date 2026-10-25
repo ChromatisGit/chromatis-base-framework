@@ -6,6 +6,7 @@
  */
 import { compileApi, matchApi, type ApiTable } from "./api.js";
 import {
+  COOKIES_HEADER,
   DATA_PREFIX,
   ROUTE_PARAM,
   ROUTES_PARAM,
@@ -170,6 +171,11 @@ function reply(body: DataResponse, cookies: readonly string[]): Response {
   });
   for (const cookie of cookies) {
     headers.append("Set-Cookie", cookie);
+  }
+  if (cookies.length > 0) {
+    // What the server knows about the visitor changed: the browser forgets
+    // the data it kept for offline use.
+    headers.set(COOKIES_HEADER, "1");
   }
   return new Response(JSON.stringify(body), { headers });
 }

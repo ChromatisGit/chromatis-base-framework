@@ -152,6 +152,7 @@ const STATIC_TYPES = {
   ".txt": "text/plain; charset=utf-8",
   ".xml": "application/xml",
   ".json": "application/json",
+  ".webmanifest": "application/manifest+json",
 };
 
 /** Every file below `directory`, as paths relative to it with `/`. */

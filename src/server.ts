@@ -6,6 +6,7 @@ import path from "node:path";
 import { withRequestScope } from "./request-scope.js";
 import { handleApi, type ApiTable } from "./api.js";
 import { handleData, type DataTable } from "./data.js";
+import { DOCUMENT_HEADER, SERVICE_WORKER_PATH } from "./data-protocol.js";
 
 /** The generated route tables (`.chromatis/build/routes.ts`). */
 export type ServerRoutes = Readonly<{ api: ApiTable; data: DataTable }>;
@@ -80,7 +81,7 @@ export function createStaticFiles(
       headers: {
         "Cache-Control": pathname.startsWith("/assets/")
           ? "public, max-age=31536000, immutable"
-          : file.endsWith(".html")
+          : file.endsWith(".html") || pathname === SERVICE_WORKER_PATH
             ? "no-cache"
             : "public, max-age=3600",
       },
@@ -134,12 +135,14 @@ export async function startFrameworkBun<Service>(
       if (answer) {
         return answer;
       }
-      // Every other GET is a page: the browser app routes it.
+      // Every other GET is a page: the browser app routes it. The service
+      // worker answers this address from the device from then on.
       return request.method === "GET" || request.method === "HEAD"
         ? new Response(Bun.file(path.join(clientRoot, "index.html")), {
             headers: {
               "Content-Type": "text/html; charset=utf-8",
               "Cache-Control": "no-cache",
+              [DOCUMENT_HEADER]: "app",
             },
           })
         : new Response(null, { status: 404 });

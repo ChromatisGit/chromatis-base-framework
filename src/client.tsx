@@ -21,6 +21,7 @@ import {
   type RouteObject,
 } from "react-router";
 import {
+  COOKIES_HEADER,
   DATA_PREFIX,
   ROUTE_PARAM,
   ROUTES_PARAM,
@@ -29,6 +30,13 @@ import {
   type DataResult,
   type Prerendered,
 } from "./data-protocol.js";
+import {
+  activateWaitingVersion,
+  forgetOfflineData,
+  registerServiceWorker,
+} from "./offline.js";
+
+export { updateApp } from "./offline.js";
 
 /** What a page file exports. */
 export type PageModule = Readonly<{
@@ -89,6 +97,8 @@ export type AppDefinition = Readonly<{
   rootServer?: boolean;
   /** The document's title, for pages whose `meta` names none. */
   title: string;
+  /** The build has a service worker (`document.serviceWorker`). */
+  serviceWorker?: boolean;
   routes: readonly ClientRoute[];
 }>;
 
@@ -105,6 +115,9 @@ export function dataUrl(page: string, param: string, value: string): string {
 }
 
 async function readData(response: Response): Promise<DataResponse> {
+  if (response.headers.has(COOKIES_HEADER)) {
+    forgetOfflineData();
+  }
   if (!response.ok) {
     throw new Response(null, {
       status: response.status,
@@ -415,15 +428,53 @@ declare global {
   }
 }
 
+/** The running app's routes, for `preloadPage`. */
+let running:
+  { routes: RouteObject[]; servers: ReadonlySet<string> } | undefined;
+
+/**
+ * Loads a page's server data ahead of a visit, so the service worker keeps
+ * it and the page opens without a network. Resolves false if it failed.
+ */
+export async function preloadPage(path: string): Promise<boolean> {
+  if (!running) {
+    return false;
+  }
+  const { routes, servers } = running;
+  const ids = (matchRoutes(routes, path) ?? []).flatMap(({ route }) =>
+    route.id !== undefined && servers.has(route.id) ? [route.id] : [],
+  );
+  if (!ids.length) {
+    return true;
+  }
+  try {
+    const page = new URL(path, window.location.origin).href;
+    const response = await fetch(dataUrl(page, ROUTES_PARAM, ids.join(",")), {
+      headers: { Accept: "application/json" },
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Vite sets `PROD` (a boolean) in a build; Bun's tests see strings or nothing. */
+const production = (): boolean => String(import.meta.env?.PROD) === "true";
+
 /**
  * Renders the app into `#root`, or hydrates it when the page was prerendered
  * for this path. Hydration uses the build's data; the visitor's own (cookies,
- * releases) replaces it right after.
+ * releases) replaces it right after. With a service worker, a version that
+ * is waiting becomes active first.
  */
 export async function startApp(app: AppDefinition): Promise<void> {
   const container = document.getElementById("root");
   if (!container) {
     throw new Error("index.html has no #root element");
+  }
+  const offline = app.serviceWorker === true && production();
+  if (offline && (await activateWaitingVersion())) {
+    return;
   }
   const prerendered = window.__chromatisPrerender;
   const hydrate = prerendered?.path === window.location.pathname;
@@ -435,6 +486,10 @@ export async function startApp(app: AppDefinition): Promise<void> {
     dataStrategy: createDataStrategy(servers, browserFetch, pages),
     ...(hydrate ? { hydrationData: prerendered.hydrationData } : {}),
   });
+  running = { routes, servers };
+  if (offline) {
+    registerServiceWorker();
+  }
   const tree = (
     <StrictMode>
       <RouterProvider router={router} />

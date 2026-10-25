@@ -429,6 +429,23 @@ const documentSchema = z
     viewport: z.string().default("width=device-width, initial-scale=1"),
     /** Applies the stored color mode before the first paint (see useColorMode). */
     colorModeKey: z.string().optional(),
+    /** URL of the web app manifest (a static file), for installing the app. */
+    manifest: z.string().optional(),
+    /** The browser's UI colour around the app (`theme-color`). */
+    themeColor: z.string().optional(),
+    /**
+     * A service worker (`/sw.js`) so the app starts from the device: the
+     * build's files are cached when it installs, pages and their data are
+     * kept for offline use, and a new version becomes active at the next
+     * start. `immutable` lists path prefixes whose files never change (their
+     * address carries their hash): they are kept once fetched.
+     */
+    serviceWorker: z
+      .object({
+        immutable: z.array(z.string().regex(/^\/\S*\/$/)).default([]),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

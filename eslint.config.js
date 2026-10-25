@@ -38,6 +38,7 @@ export default [
       "infra/**/*.js",
       "src/vite.js",
       "src/prerender-run.js",
+      "src/service-worker.js",
     ],
     rules: {
       "@typescript-eslint/no-floating-promises": "off",

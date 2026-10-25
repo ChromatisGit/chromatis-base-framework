@@ -28,6 +28,7 @@ import { commandEnvironment, targetOption } from "./commandOptions.js";
 import { resolveApplication, instanceMode } from "./instance.js";
 import { preflight } from "./preflight.js";
 import { prerenderPages } from "./prerender.js";
+import { writeServiceWorker } from "./serviceWorker.js";
 import { flattenRoutes } from "./routes.js";
 import type {
   BuildTarget,
@@ -105,6 +106,8 @@ async function buildApp(
     { ...process.env, CHROMATIS_BUILD_TARGET: target },
   );
   const pages = prerenderPages(root, app, frameworkRoot);
+  // After prerendering: the service worker carries the final `index.html`.
+  writeServiceWorker(root, app);
   if (app.image) {
     exportMount(root, app, pages);
   } else if (target === "docker") {

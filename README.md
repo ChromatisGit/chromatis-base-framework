@@ -313,4 +313,13 @@ bun run test
 
 `check` is non-mutating and runs strict TypeScript, ESLint (including architecture rules), Prettier, generated-migration checks, `security:check` (access rules and SQL invariants) and the Bun tests, including real builds of a fixture application for both targets. `bun run security:describe` prints every table's access rules and `bun run security:audit` verifies a live database. The shared architecture rules (`@chromatis/base/infra/eslint`) enforce dependency direction between `app`, `modules`, `adapter` and `helper`, imports of other modules through their public `index.ts`, and the module root layout (`index.ts`, `module.ts`, `module.test.ts` only). The `db` and `security` tools act on the `src/modules/*` of the directory they run in, which is the product package.
 
-The shared PWA manifest is available at `@chromatis/base/infra/pwa/manifest`; it provides installability metadata only and has no offline cache or service worker.
+## Installing and starting from the device
+
+The shared PWA manifest is available at `@chromatis/base/infra/pwa/manifest` as a starting point; the product serves its own manifest as a static file and names it in the document (`manifest`, `themeColor`).
+
+With `document.serviceWorker`, `chromatis build` writes `/sw.js` into the client build (not for an instance on an image: the image's worker serves it). It caches the build's scripts, styles and WOFF2 fonts when a version installs, so the app starts from the device:
+
+- **Pages:** an address that the server answered with the app's document (header `x-chromatis-document`) is answered from the installed version from then on; other pages (a static site in front of the app) come from the network and are kept for offline use.
+- **Data:** requests to the data endpoint go to the network; each route's result is kept, and without a network a request is answered from them if every route has one. `preloadPage(path)` (`@chromatis/base/client`) loads a page's data ahead of a visit. A response that sets a cookie empties the kept data.
+- **Immutable files:** paths under `serviceWorker.immutable` (for example `/files/`, files named by their hash) are kept once fetched.
+- **Updates:** an open page asks for a new version about once an hour and installs it in the background; it becomes active at the next start of the app, never while a page is open. `updateApp()` brings it in right away and reloads, for an app older than the data it was sent.

@@ -44,3 +44,14 @@ export type DataResponse =
       reload?: true;
     }>
   | Readonly<{ results: Readonly<Record<string, DataResult>> }>;
+
+/** Where the service worker is served (`document.serviceWorker`). */
+export const SERVICE_WORKER_PATH = "/sw.js";
+/** Marks the server's answer with the app's document, as opposed to a static page. */
+export const DOCUMENT_HEADER = "x-chromatis-document";
+/** The service worker's kept data results; emptied when the visitor changes. */
+export const DATA_CACHE = "chromatis-data";
+/** Set on a data response the service worker put together without a network. */
+export const OFFLINE_HEADER = "x-chromatis-offline";
+/** Set on a data response that sets a cookie: the visitor's data changed. */
+export const COOKIES_HEADER = "x-chromatis-cookies";
