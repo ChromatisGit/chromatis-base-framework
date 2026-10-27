@@ -95,7 +95,6 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./instance/site:/srv/site:ro
-      - files:/srv/files:ro
       - caddy_data:/data
       - caddy_config:/config
     ulimits:

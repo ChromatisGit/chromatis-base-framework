@@ -79,6 +79,15 @@ function describeRule(rule: AccessRule): string {
   if (rule.through) {
     parts.push(`through ${rule.through}`);
   }
+  if (rule.nullColumn) {
+    parts.push(`${rule.nullColumn} IS NULL`);
+  }
+  if (rule.contextColumn) {
+    parts.push(`${rule.contextColumn} matches ${rule.contextKey} context`);
+  }
+  if (rule.expiresAfterColumn) {
+    parts.push(`${rule.expiresAfterColumn} is in the future`);
+  }
   return parts.join(" AND ");
 }
 

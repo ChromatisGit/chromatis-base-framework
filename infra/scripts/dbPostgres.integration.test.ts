@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- one PostgreSQL fixture exercises the database contract end to end. */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -272,6 +273,22 @@ describe("PostgreSQL database contract", () => {
         SELECT title FROM courses WHERE title = 'Rollback'
       `,
     ).toEqual([]);
+  });
+
+  test("capability context is validated and confined to its query", async () => {
+    const database = localDatabase();
+    const token = "a".repeat(48);
+    const [inside] = await database.capabilitySQL("share_token", token)<
+      Array<{ value: string }>
+    >`SELECT current_setting('app.share_token', true) AS value`;
+    expect(inside?.value).toBe(token);
+    const [outside] = await database.publicSQL<Array<{ value: string | null }>>`
+      SELECT nullif(current_setting('app.share_token', true), '') AS value
+    `;
+    expect(outside?.value).toBeNull();
+    await expect(
+      database.capabilitySQL("share_token", "too-short")`SELECT 1`,
+    ).rejects.toThrow("Invalid capability value");
   });
 });
 

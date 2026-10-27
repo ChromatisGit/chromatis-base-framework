@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- access rules are parsed, validated and compiled together. */
 import { createHash } from "node:crypto";
 import { parse } from "smol-toml";
 
@@ -17,6 +18,13 @@ export interface AccessRule {
   readonly throughUserColumn?: string;
   readonly throughColumn?: string;
   readonly throughReferences?: string;
+  /** Match a nullable column, for example collection rows without an owner. */
+  readonly nullColumn?: string;
+  /** Match a row column to a framework-scoped request capability. */
+  readonly contextColumn?: string;
+  readonly contextKey?: string;
+  /** A capability may only expose a row until this timestamp. */
+  readonly expiresAfterColumn?: string;
 }
 
 export interface TableAccess {
@@ -77,6 +85,10 @@ const RULE_KEYS = [
   "through_user_column",
   "through_column",
   "through_references",
+  "null_column",
+  "context_column",
+  "context_key",
+  "expires_after_column",
 ] as const;
 const MAX_TABLE_LENGTH = 55;
 
@@ -120,6 +132,7 @@ function readIdentifier(
   return value;
 }
 
+// eslint-disable-next-line max-lines-per-function -- validates every supported rule field.
 function parseRule(source: string, location: string, raw: unknown): AccessRule {
   if (!isRecord(raw)) {
     return fail(source, location, "a rule must be a TOML table");
@@ -162,6 +175,46 @@ function parseRule(source: string, location: string, raw: unknown): AccessRule {
   }
   if ("through" in raw) {
     rule.through = readIdentifier(source, `${location}.through`, raw.through);
+  }
+  if ("null_column" in raw) {
+    rule.nullColumn = readIdentifier(
+      source,
+      `${location}.null_column`,
+      raw.null_column,
+    );
+  }
+  if ("context_column" in raw || "context_key" in raw) {
+    if (!("context_column" in raw) || !("context_key" in raw)) {
+      fail(
+        source,
+        location,
+        "context_column and context_key must be declared together",
+      );
+    }
+    rule.contextColumn = readIdentifier(
+      source,
+      `${location}.context_column`,
+      raw.context_column,
+    );
+    const key = readIdentifier(
+      source,
+      `${location}.context_key`,
+      raw.context_key,
+    );
+    if (!["share_token", "classroom_code"].includes(key)) {
+      fail(source, location, `unsupported context_key "${key}"`);
+    }
+    rule.contextKey = key;
+  }
+  if ("expires_after_column" in raw) {
+    if (!rule.contextColumn) {
+      fail(source, location, "expires_after_column requires context_column");
+    }
+    rule.expiresAfterColumn = readIdentifier(
+      source,
+      `${location}.expires_after_column`,
+      raw.expires_after_column,
+    );
   }
   for (const [tomlKey, field] of [
     ["through_user_column", "throughUserColumn"],
@@ -388,6 +441,7 @@ export function linkTableProblem(
     : `\`through = "${link}"\` on "${protectedTable}": the select rules of "${link}" do not let a User read their own rows (${userColumn} = current User), so the relationship can never match; ${hint}`;
 }
 
+// eslint-disable-next-line max-lines-per-function -- combines role, relation and scoped context checks.
 function compileRule(
   source: string,
   location: string,
@@ -472,6 +526,28 @@ function compileRule(
         referencedTable: table,
         referencedColumn: through.references,
       },
+    );
+  }
+  for (const column of [
+    rule.nullColumn,
+    rule.contextColumn,
+    rule.expiresAfterColumn,
+  ]) {
+    if (column && catalog && !catalog.tables.get(table)?.has(column)) {
+      fail(source, location, `column "${table}.${column}" does not exist`);
+    }
+  }
+  if (rule.nullColumn) {
+    conditions.push(`${quote(table)}.${quote(rule.nullColumn)} IS NULL`);
+  }
+  if (rule.contextColumn) {
+    conditions.push(
+      `${quote(table)}.${quote(rule.contextColumn)} = nullif(pg_catalog.current_setting('app.${rule.contextKey}', true), '')`,
+    );
+  }
+  if (rule.expiresAfterColumn) {
+    conditions.push(
+      `${quote(table)}.${quote(rule.expiresAfterColumn)} > now()`,
     );
   }
   return { sql: conditions.join(" AND "), requires };

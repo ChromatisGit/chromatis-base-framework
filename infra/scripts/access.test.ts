@@ -86,6 +86,15 @@ describe("access.toml schema", () => {
     ["[[access.courses.select]]\npublic = false\n", "public = true"],
     ['[[access.courses.select]]\npublic = true\nrole = "a"\n', "only key"],
     ['[[access.courses.select]]\nthrough_column = "x"\n', "requires `through`"],
+    ['[[access.courses.select]]\ncontext_column = "id"\n', "declared together"],
+    [
+      '[[access.courses.select]]\ncontext_column = "id"\ncontext_key = "user_id"\n',
+      "unsupported context_key",
+    ],
+    [
+      '[[access.courses.select]]\nexpires_after_column = "id"\n',
+      "requires context_column",
+    ],
     ['[[access.courses.merge]]\nrole = "a"\n', "unknown key"],
     ['[[access."Courses".select]]\nrole = "a"\n', "invalid identifier"],
     ['[[access.courses.select]]\nrole = "a\'; DROP"\n', "invalid identifier"],
@@ -95,7 +104,41 @@ describe("access.toml schema", () => {
   });
 });
 
+// eslint-disable-next-line max-lines-per-function -- related policy compiler cases share the same schema fixture.
 describe("RLS compilation", () => {
+  test("limits public collection rows and capability rows in the generated policy", () => {
+    const [courses] = compileAccess(
+      parseAccessToml(
+        `
+[[access.courses.select]]
+user_column = "owner_id"
+[[access.courses.select]]
+null_column = "owner_id"
+[[access.courses.select]]
+context_column = "id"
+context_key = "share_token"
+expires_after_column = "expires_at"
+`,
+        "test",
+      ),
+      "test",
+      {
+        ...catalog,
+        tables: new Map([
+          ...catalog.tables,
+          ["courses", new Set(["id", "owner_id", "expires_at"])],
+        ]),
+      },
+    );
+    const expression = courses!.policies[0]!.expression;
+    expect(expression).toContain(
+      '"courses"."owner_id" = chromatis.current_user_id()',
+    );
+    expect(expression).toContain('"courses"."owner_id" IS NULL');
+    expect(expression).toContain("current_setting('app.share_token', true)");
+    expect(expression).toContain('"courses"."expires_at" > now()');
+    expect(courses!.policies[0]!.public).toBe(false);
+  });
   test("combines rules with OR and conditions with AND", () => {
     const [courses] = compileAccess(
       parseAccessToml(example, "test"),

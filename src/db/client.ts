@@ -16,8 +16,14 @@ export type Transaction<T> = (sql: DbSql) => Promise<T>;
 
 export interface Database {
   readonly publicSQL: DbSql;
+  capabilitySQL(key: "share_token" | "classroom_code", value: string): DbSql;
   userSQL(user: DatabaseUser): DbSql;
   publicTransaction<T>(operation: Transaction<T>): Promise<T>;
+  capabilityTransaction<T>(
+    key: "share_token" | "classroom_code",
+    value: string,
+    operation: Transaction<T>,
+  ): Promise<T>;
   userTransaction<T>(user: DatabaseUser, operation: Transaction<T>): Promise<T>;
 }
 
@@ -125,11 +131,17 @@ export function createDatabase(
 
   const database: Database = {
     publicSQL,
+    capabilitySQL: (key, value) =>
+      createSingleQuerySql((operation) =>
+        adapter.withCapabilityTx(key, value, operation),
+      ),
     userSQL: (user) =>
       createSingleQuerySql((operation) =>
         adapter.withUserTx(assertUser(user), operation),
       ),
     publicTransaction: (operation) => adapter.withPublicTx(operation),
+    capabilityTransaction: (key, value, operation) =>
+      adapter.withCapabilityTx(key, value, operation),
     userTransaction: (user, operation) =>
       adapter.withUserTx(assertUser(user), operation),
   };

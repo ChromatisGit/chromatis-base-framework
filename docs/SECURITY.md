@@ -88,6 +88,14 @@ force = true                  # optional FORCE ROW LEVEL SECURITY (default false
   `security:check` fail with a clear error when the link table is undeclared or its select
   rules cannot expose the User's own rows.
 - A table may be declared in only one module.
+- `null_column = "owner_id"` selects rows whose column is null (for example,
+  published collection rows). It can be a separate OR rule next to an owner's
+  `user_column` rule.
+- A scoped capability uses `context_column` with `context_key = "share_token"`
+  or `"classroom_code"`. The framework sets the context for one transaction
+  through `capabilitySQL` / `capabilityTransaction`; application SQL cannot set
+  it directly. `expires_after_column` additionally requires a future timestamp.
+  Validate the caller's lesson credential before using a short classroom code.
 
 ### Generating RLS
 

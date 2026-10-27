@@ -43,6 +43,7 @@ async function runNeonTx<T>(
   userId: string | null,
   fn: (sql: DbSql) => Promise<T>,
   role: string,
+  capability?: { key: "share_token" | "classroom_code"; value: string },
 ): Promise<T> {
   const client = new Client({ connectionString });
   await client.connect();
@@ -52,6 +53,12 @@ async function runNeonTx<T>(
     if (userId) {
       await client.query("SELECT set_config('app.user_id', $1, true)", [
         userId,
+      ]);
+    }
+    if (capability) {
+      await client.query("SELECT set_config($1, $2, true)", [
+        `app.${capability.key}`,
+        capability.value,
       ]);
     }
     const sql = createSqlTag(async (query) => {
@@ -87,6 +94,21 @@ export function createWorkerAdapter(
   return {
     async withPublicTx<T>(fn: (sql: DbSql) => Promise<T>): Promise<T> {
       return runNeonTx(connectionString, null, fn, role);
+    },
+
+    async withCapabilityTx<T>(
+      key: "share_token" | "classroom_code",
+      value: string,
+      fn: (sql: DbSql) => Promise<T>,
+    ): Promise<T> {
+      if (
+        key === "share_token"
+          ? !/^[a-f0-9]{48}$/.test(value)
+          : !/^[0-9]{4}$/.test(value)
+      ) {
+        throw new Error("[db] Invalid capability value.");
+      }
+      return runNeonTx(connectionString, null, fn, role, { key, value });
     },
 
     async withUserTx<T>(

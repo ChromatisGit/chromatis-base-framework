@@ -26,6 +26,11 @@ export interface MigrationAsset {
 
 export interface DbAdapter {
   withPublicTx<T>(fn: (sql: DbSql) => Promise<T>): Promise<T>;
+  withCapabilityTx<T>(
+    key: "share_token" | "classroom_code",
+    value: string,
+    fn: (sql: DbSql) => Promise<T>,
+  ): Promise<T>;
   withUserTx<T>(user: DatabaseUser, fn: (sql: DbSql) => Promise<T>): Promise<T>;
   runSetup(options: AdapterSetupOptions): Promise<void>;
 }

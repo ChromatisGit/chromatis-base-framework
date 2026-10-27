@@ -123,6 +123,29 @@ export function createNodeAdapter(
       return pool.begin(async (tx) => fn(makeTxSql(tx))) as Promise<T>;
     },
 
+    async withCapabilityTx<T>(
+      key: "share_token" | "classroom_code",
+      value: string,
+      fn: (sql: DbSql) => Promise<T>,
+    ): Promise<T> {
+      await ensureSafeRuntimeRole();
+      if (
+        key === "share_token"
+          ? !/^[a-f0-9]{48}$/.test(value)
+          : !/^[0-9]{4}$/.test(value)
+      ) {
+        throw new Error("[db] Invalid capability value.");
+      }
+      return pool.begin(async (tx) => {
+        await tx.unsafe(
+          "SELECT set_config($1, $2, true)",
+          [`app.${key}`, value],
+          { prepare: true },
+        );
+        return fn(makeTxSql(tx));
+      }) as Promise<T>;
+    },
+
     async withUserTx<T>(
       user: DatabaseUser,
       fn: (sql: DbSql) => Promise<T>,
