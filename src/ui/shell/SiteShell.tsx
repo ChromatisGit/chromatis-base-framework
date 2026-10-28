@@ -36,6 +36,7 @@ export interface ShellActionSlot {
 }
 
 export interface SiteShellProps {
+  sidebarInitialState?: "open" | "closed" | undefined;
   brand: ReactNode;
   brandTo: string;
   brandLabel: string;
@@ -205,6 +206,7 @@ function NavigationTree({
 // The shell owns menu focus, scroll behavior, and responsive navigation markup.
 // eslint-disable-next-line max-lines-per-function
 export function SiteShell({
+  sidebarInitialState,
   brand,
   brandTo,
   brandLabel,
@@ -230,16 +232,22 @@ export function SiteShell({
   const shellRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(
+    sidebarInitialState !== "closed",
+  );
   const [concealed, setConcealed] = useState(false);
 
   useEffect(() => {
     try {
-      setSidebarOpen(localStorage.getItem(sidebarStorageKey) !== "closed");
+      setSidebarOpen(
+        sidebarInitialState
+          ? sidebarInitialState === "open"
+          : localStorage.getItem(sidebarStorageKey) !== "closed",
+      );
     } catch {
       // Storage can be unavailable in private browsing.
     }
-  }, [sidebarStorageKey]);
+  }, [sidebarStorageKey, sidebarInitialState, path]);
 
   useEffect(() => {
     setMenuOpen(false);
