@@ -1,3 +1,4 @@
+import { validCapability } from "./capability.js";
 import postgres from "postgres";
 import {
   assertSafeRole,
@@ -129,11 +130,7 @@ export function createNodeAdapter(
       fn: (sql: DbSql) => Promise<T>,
     ): Promise<T> {
       await ensureSafeRuntimeRole();
-      if (
-        key === "share_token"
-          ? !/^[a-f0-9]{48}$/.test(value)
-          : !/^[0-9]{4}$/.test(value)
-      ) {
+      if (!validCapability(key, value)) {
         throw new Error("[db] Invalid capability value.");
       }
       return pool.begin(async (tx) => {

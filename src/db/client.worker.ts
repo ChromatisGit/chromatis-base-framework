@@ -1,3 +1,4 @@
+import { validCapability } from "./capability.js";
 import { Client } from "@neondatabase/serverless";
 import {
   assertSafeRole,
@@ -101,11 +102,7 @@ export function createWorkerAdapter(
       value: string,
       fn: (sql: DbSql) => Promise<T>,
     ): Promise<T> {
-      if (
-        key === "share_token"
-          ? !/^[a-f0-9]{48}$/.test(value)
-          : !/^[0-9]{4}$/.test(value)
-      ) {
+      if (!validCapability(key, value)) {
         throw new Error("[db] Invalid capability value.");
       }
       return runNeonTx(connectionString, null, fn, role, { key, value });
