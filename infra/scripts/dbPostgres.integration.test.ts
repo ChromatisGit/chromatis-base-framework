@@ -302,7 +302,7 @@ test("alphanumeric classroom capabilities are confined to their query", async ()
     Array<{ value: string | null }>
   >`SELECT nullif(current_setting('app.classroom_code', true), '') AS value`;
   expect(afterClassroom?.value).toBeNull();
- });
+});
 
 describe("PostgreSQL connections", () => {
   const database = () => localDatabase(2);
