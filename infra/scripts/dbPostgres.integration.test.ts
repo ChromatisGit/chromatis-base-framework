@@ -292,6 +292,18 @@ describe("PostgreSQL database contract", () => {
   });
 });
 
+test("alphanumeric classroom capabilities are confined to their query", async () => {
+  const database = localDatabase();
+  const [classroom] = await database.capabilitySQL("classroom_code", "TQK6")<
+    Array<{ value: string }>
+  >`SELECT current_setting('app.classroom_code', true) AS value`;
+  expect(classroom?.value).toBe("TQK6");
+  const [afterClassroom] = await database.publicSQL<
+    Array<{ value: string | null }>
+  >`SELECT nullif(current_setting('app.classroom_code', true), '') AS value`;
+  expect(afterClassroom?.value).toBeNull();
+});
+
 describe("PostgreSQL connections", () => {
   const database = () => localDatabase(2);
 

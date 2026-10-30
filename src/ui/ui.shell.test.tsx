@@ -138,3 +138,25 @@ describe("third UI slice", () => {
     expect(html).not.toContain('class="bottom-nav"');
   });
 });
+
+test("page-specific sidebar state is rendered before browser storage is read", () => {
+  for (const initial of ["open", "closed"] as const) {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <SiteShell
+          brand="Portal"
+          brandTo="/"
+          brandLabel="Home"
+          navigation={navigation}
+          labels={labels}
+          icons={icons}
+          sidebarStorageKey="sidebar-test"
+          sidebarInitialState={initial}
+        >
+          <p>Content</p>
+        </SiteShell>
+      </MemoryRouter>,
+    );
+    expect(html.includes("shell--collapsed")).toBe(initial === "closed");
+  }
+});
