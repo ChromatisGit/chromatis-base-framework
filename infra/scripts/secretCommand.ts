@@ -3,7 +3,11 @@ import {
   type SecretEntry,
   type SecretKind,
 } from "./secretMenu.js";
-import type { DeclaredSecret, SecretRequirement } from "./moduleSet.js";
+import {
+  DATABASE_SECRETS,
+  type DeclaredSecret,
+  type SecretRequirement,
+} from "./moduleSet.js";
 import type { ConfigEnvironment } from "../../src/config.js";
 import { createSecretTerminal } from "./secretPrompt.js";
 
@@ -39,11 +43,23 @@ export function secretEntries(
       kind: "credential",
       service: services.credentialService,
     })),
-    ...app.declaredSecrets.map((secret): SecretEntry => ({
-      name: secret.name,
-      kind: KIND[secret.requirement],
-      service: applicationService,
-    })),
+    ...app.declaredSecrets
+      .filter(
+        (secret) =>
+          !(
+            app.environment === "local" &&
+            process.env.CHROMATIS_DEV_DATABASE !== "external" &&
+            secret.owner === "chromatis" &&
+            DATABASE_SECRETS.some(
+              (databaseSecret) => databaseSecret.name === secret.name,
+            )
+          ),
+      )
+      .map((secret): SecretEntry => ({
+        name: secret.name,
+        kind: KIND[secret.requirement],
+        service: applicationService,
+      })),
   ];
 }
 

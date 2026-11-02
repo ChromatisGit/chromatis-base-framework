@@ -56,6 +56,51 @@ describe("secret hygiene", () => {
 });
 
 describe("secret command", () => {
+  test("hides automatically supplied local database credentials only in local mode", () => {
+    const services = {
+      credentialNames: [],
+      credentialService: "framework",
+      applicationService: () => "app",
+    };
+    const declaredSecrets = [
+      {
+        name: "DATABASE_URL",
+        owner: "chromatis",
+        description: "database",
+        requirement: "always" as const,
+      },
+    ];
+    const previous = process.env.CHROMATIS_DEV_DATABASE;
+    try {
+      delete process.env.CHROMATIS_DEV_DATABASE;
+      expect(
+        secretEntries(
+          { name: "demo", environment: "local", declaredSecrets },
+          services,
+        ),
+      ).toHaveLength(0);
+      expect(
+        secretEntries(
+          { name: "demo", environment: "production", declaredSecrets },
+          services,
+        ),
+      ).toHaveLength(1);
+      process.env.CHROMATIS_DEV_DATABASE = "external";
+      expect(
+        secretEntries(
+          { name: "demo", environment: "local", declaredSecrets },
+          services,
+        ),
+      ).toHaveLength(1);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.CHROMATIS_DEV_DATABASE;
+      } else {
+        process.env.CHROMATIS_DEV_DATABASE = previous;
+      }
+    }
+  });
+
   test("lists Cloudflare credentials and then every declared secret", () => {
     const entries = secretEntries(
       {

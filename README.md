@@ -243,6 +243,8 @@ All visible strings and destinations come from the application. `PageHeader`,
 `ServiceAction`, `ServiceContent`, and `EditorialArticle` provide shared layout
 and semantic markup while the application owns content and assets.
 
+For `chromatis dev`, an application that uses PostgreSQL automatically starts an instance-specific PostgreSQL 17 Docker container and supplies the three database URLs. Docker must be installed and running. The container and its named volume persist after the dev server stops, so data survives restarts; the port is bound to localhost and selected by Docker. The local database uses development-only credentials and is separate from any database configured in `.env.local`. Set `CHROMATIS_DEV_DATABASE=external` to use configured database credentials instead. Local migrations run automatically at application startup.
+
 ## Database contract
 
 Applications start PostgreSQL through the framework-owned discovery path; they do not import or assemble raw migration files:

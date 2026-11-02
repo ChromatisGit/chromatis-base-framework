@@ -45,6 +45,7 @@ import { checkTooling, forbiddenFiles, repairTooling } from "./tooling.js";
 import { printPlan } from "./deployPlan.js";
 import { smokeTest } from "./smoke.js";
 import { secretCommand } from "./secretCommand.js";
+import { devDatabase } from "./devDatabase.js";
 
 const root = process.cwd();
 const wranglerPath = findWrangler(root);
@@ -333,7 +334,7 @@ async function applicationCommand(
     embedArtifacts(root, app);
     run(
       "bun",
-      ["x", "vite", "--config", path.join(frameworkRoot, "src/vite.js")],
+      ["x", "--bun", "vite", "--config", path.join(frameworkRoot, "src/vite.js")],
       await developmentEnvironment(app, args.includes("--open")),
     );
   }
@@ -359,6 +360,13 @@ async function developmentEnvironment(
     ...stored,
     ...process.env,
   };
+  if (
+    app.postgresql &&
+    app.environment === "local" &&
+    process.env.CHROMATIS_DEV_DATABASE !== "external"
+  ) {
+    Object.assign(env, await devDatabase(app.instanceRoot));
+  }
   delete env[DEV_OPEN_VARIABLE];
   if (open) {
     env[DEV_OPEN_VARIABLE] = "1";
