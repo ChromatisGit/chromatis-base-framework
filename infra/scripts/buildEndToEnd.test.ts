@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { generateArtifacts } from "./application.js";
 import { embedArtifacts, prepareArtifacts } from "./artifacts.js";
@@ -63,6 +63,47 @@ const instanceFiles = {
   // The instance's own static file wins over the product's.
   "public/_headers": "MARK_INSTANCE_HEADERS",
 };
+
+test("a mounted Bun image keeps runtime configuration out of the browser build", async () => {
+  mkdirSync(sandbox, { recursive: true });
+  const { root } = await createInstance({
+    inside: sandbox,
+    linkChromatis: true,
+    ...product,
+    packageFiles: {
+      ...product.packageFiles,
+      "app/root.tsx":
+        'import { app, config } from "chromatis-config";\n' +
+        'import { artifacts } from "chromatis-artifacts";\n' +
+        "export default function Root() { return <p>{JSON.stringify({ app, config, artifacts })}</p>; }\n",
+    },
+    modules: { artifact: hookedModule },
+    config: {
+      "app.toml":
+        '[deployment]\ntarget = "bun"\ndomain = "localhost"\ninstance = "mounted"\n',
+    },
+    extraDependencies: { react: "*", "react-dom": "*", "react-router": "*" },
+  });
+  const result = Bun.spawnSync(["bun", cli, "build"], {
+    cwd: root,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr.toString());
+  }
+  const assets = path.join(root, "build/client/assets");
+  const client = readdirSync(assets)
+    .filter((file) => file.endsWith(".js"))
+    .map((file) => readFileSync(path.join(assets, file), "utf8"))
+    .join("\n");
+  const server = readFileSync(
+    path.join(root, ".chromatis/image/server.js"),
+    "utf8",
+  );
+  expect(client).not.toContain("PUBLIC_URL must be the public address");
+  expect(server).toContain("PUBLIC_URL must be the public address");
+}, 60_000);
 
 /** What a running server answers for the pages, their data and the endpoint. */
 async function expectServed(origin: string) {

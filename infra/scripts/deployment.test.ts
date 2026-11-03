@@ -9,7 +9,12 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
-import { checkTooling, expectedTooling, repairTooling } from "./tooling.js";
+import {
+  checkTooling,
+  expectedTooling,
+  generatedTooling,
+  repairTooling,
+} from "./tooling.js";
 import { generateArtifacts, migrationPlan } from "./application.js";
 import { printPlan } from "./deployPlan.js";
 import type { ResolvedApplication } from "./resolvedApplication.js";
@@ -79,6 +84,18 @@ test("canonical tooling accepts pristine stubs and rejects either modified stub"
     expect(readFileSync(path.join(root, file), "utf8")).toBe(expected);
     expect(checkTooling(root)).toEqual([]);
   }
+});
+
+test("canonical tooling accepts Windows checkout line endings", () => {
+  const root = project();
+  repairTooling(root);
+  for (const [file, expected] of Object.entries({
+    ...expectedTooling(),
+    ...generatedTooling(),
+  })) {
+    writeFileSync(path.join(root, file), expected.replace(/\r?\n/g, "\r\n"));
+  }
+  expect(checkTooling(root)).toEqual([]);
 });
 
 test("init removes what React Router's framework mode left behind", () => {

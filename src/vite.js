@@ -1,5 +1,5 @@
 /* global process, Headers, Request, URL */
-import { defineConfig, searchForWorkspaceRoot } from "vite";
+import { defineConfig, normalizePath, searchForWorkspaceRoot } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import path from "node:path";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
@@ -255,13 +255,16 @@ function documentAtRoot() {
 function serverOnlyModules(root) {
   const files = new Set(
     ["artifacts.ts", "config.ts"].map((file) =>
-      path.join(root, ".chromatis/build", file),
+      normalizePath(path.join(root, ".chromatis/build", file)),
     ),
   );
   return {
     name: "chromatis-server-only-modules",
     load(id) {
-      if (this.environment?.name !== "client" || !files.has(id)) {
+      if (
+        this.environment?.name !== "client" ||
+        !files.has(normalizePath(id))
+      ) {
         return undefined;
       }
       return [

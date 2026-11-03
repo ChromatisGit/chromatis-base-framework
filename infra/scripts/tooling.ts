@@ -116,7 +116,8 @@ export function checkTooling(root = process.cwd()): string[] {
   ]) {
     if (
       !existsSync(path.join(root, file)) ||
-      readFileSync(path.join(root, file), "utf8") !== expected
+      readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n") !==
+        expected.replace(/\r\n/g, "\n")
     ) {
       problems.push(
         `${file} differs from the framework ${file.startsWith(".chromatis/") ? "output" : "stub"}; run chromatis init`,
