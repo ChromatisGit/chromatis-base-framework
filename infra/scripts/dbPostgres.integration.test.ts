@@ -277,7 +277,7 @@ describe("PostgreSQL database contract", () => {
 
   test("capability context is validated and confined to its query", async () => {
     const database = localDatabase();
-    const token = "a".repeat(48);
+    const token = "zmHJg9CwVP16q2rC6H5VRg";
     const [inside] = await database.capabilitySQL("share_token", token)<
       Array<{ value: string }>
     >`SELECT current_setting('app.share_token', true) AS value`;

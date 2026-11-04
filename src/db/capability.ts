@@ -4,6 +4,6 @@ export function validCapability(
   value: string,
 ): boolean {
   return key === "share_token"
-    ? /^[a-f0-9]{48}$/.test(value)
+    ? /^[A-Za-z0-9_-]{22}$/.test(value)
     : /^[A-Z0-9]{4}$/.test(value);
 }

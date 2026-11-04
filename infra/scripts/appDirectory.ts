@@ -138,21 +138,31 @@ void startApp(app);
 
 /**
  * The browser entry of an instance that runs on an image: its pages are a
- * static site in front of a server built elsewhere, so a link leaves the page
- * as a document load instead of client-side routing into that server's routes.
+ * static site in front of a server built elsewhere. Public pages can share
+ * their router; crossing into the separately built app loads its document.
  */
-export const siteEntry = `${clientEntry}
+export function siteEntry(app: ResolvedApplication): string {
+  const paths = flattenRoutes(app.shell.routes)
+    .filter((route) => route.prerender)
+    .map((route) => route.url);
+  return `${clientEntry}
+const publicPaths = new Set(${JSON.stringify(paths)});
 document.addEventListener(
   "click",
   (event) => {
     const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
-    if (link instanceof HTMLAnchorElement && link.origin === location.origin) {
+    if (
+      link instanceof HTMLAnchorElement &&
+      link.origin === location.origin &&
+      !publicPaths.has(link.pathname.replace(/\\/+$/, "") || "/")
+    ) {
       event.stopPropagation();
     }
   },
   true,
 );
 `;
+}
 
 /**
  * The server's tables: API endpoints in declaration order, and every route
@@ -220,7 +230,7 @@ export function writeAppDirectory(
   writeFileSync(path.join(directory, APP_MODULE), appModule(app));
   writeFileSync(
     path.join(directory, CLIENT_ENTRY),
-    app.image ? siteEntry : clientEntry,
+    app.image ? siteEntry(app) : clientEntry,
   );
   mkdirSync(path.dirname(path.join(root, SERVER_ROUTES_FILE)), {
     recursive: true,

@@ -461,6 +461,15 @@ export async function preloadPage(path: string): Promise<boolean> {
 /** Vite sets `PROD` (a boolean) in a build; Bun's tests see strings or nothing. */
 const production = (): boolean => String(import.meta.env?.PROD) === "true";
 
+/** Distinguish full document visits when scroll positions span separate bundles. */
+export function ensureHistoryKey(
+  history: Pick<History, "state" | "replaceState">,
+): void {
+  if (!history.state?.key) {
+    history.replaceState({ ...history.state, key: crypto.randomUUID() }, "");
+  }
+}
+
 /**
  * Renders the app into `#root`, or hydrates it when the page was prerendered
  * for this path. Hydration uses the build's data; the visitor's own (cookies,
@@ -482,6 +491,7 @@ export async function startApp(app: AppDefinition): Promise<void> {
     app,
     hydrate ? await pagesFor(app, window.location.pathname) : undefined,
   );
+  ensureHistoryKey(window.history);
   const router = createBrowserRouter(routes, {
     dataStrategy: createDataStrategy(servers, browserFetch, pages),
     ...(hydrate ? { hydrationData: prerendered.hydrationData } : {}),

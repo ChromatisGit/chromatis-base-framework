@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { siteEntry } from "./appDirectory.js";
 import { generateArtifacts } from "./application.js";
 import { checkInstance } from "./instanceCheck.js";
 import { renderReport } from "./instanceCommands.js";
@@ -402,4 +403,23 @@ describe("inspect lists routes", () => {
     expect(text).toContain("Instance routes (app/routes.ts)");
     expect(text).toContain("Replaced product paths: /login");
   });
+});
+
+test("image site navigation keeps public pages in the router and excludes runtime pages", async () => {
+  const { root } = await createInstance({
+    ...productPackage,
+    app: {
+      ...productPackage.app,
+      routes: [
+        { index: true, prerender: true, file: "../app/routes/home.tsx" },
+        { path: "about", prerender: true, file: "../app/routes/courses.tsx" },
+        { path: "login", file: "../app/routes/login.tsx" },
+      ],
+    },
+  });
+  const entry = siteEntry(await resolveApplication(root, "local"));
+  const paths = JSON.parse(
+    entry.match(/const publicPaths = new Set\((.*)\);/)?.[1] ?? "null",
+  );
+  expect(paths).toEqual(["/", "/about"]);
 });

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import type { DataStrategyFunctionArgs } from "react-router";
 import {
   createDataStrategy,
+  ensureHistoryKey,
   dataUrl,
   redirectTo,
   unpack,
@@ -218,5 +219,40 @@ describe("the data strategy", () => {
       pagesOf(routes),
     )(navigation("http://x/sheets/a", routes, "POST"));
     expect(results.sheet).toEqual({ type: "data", result: "saved" });
+  });
+});
+
+describe("document history keys", () => {
+  function historyWith(initial: unknown) {
+    let state = initial;
+    return {
+      get state() {
+        return state;
+      },
+      replaceState(next: unknown) {
+        state = next;
+      },
+    };
+  }
+
+  test("separate document visits get distinct scroll keys without losing history data", () => {
+    const first = historyWith({ idx: 0, usr: { filter: "saved" } });
+    const second = historyWith(null);
+    ensureHistoryKey(first);
+    ensureHistoryKey(second);
+    expect(first.state).toMatchObject({
+      idx: 0,
+      usr: { filter: "saved" },
+      key: expect.any(String),
+    });
+    expect(second.state).toMatchObject({ key: expect.any(String) });
+    expect(first.state).not.toEqual(second.state);
+  });
+
+  test("reloads and history traversal keep the existing scroll key", () => {
+    const history = historyWith({ idx: 2, key: "existing-entry" });
+    const original = history.state;
+    ensureHistoryKey(history);
+    expect(history.state).toBe(original);
   });
 });
