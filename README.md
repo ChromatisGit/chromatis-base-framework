@@ -247,7 +247,9 @@ For `chromatis dev`, an application that uses PostgreSQL automatically starts an
 
 ## Database contract
 
-Applications start PostgreSQL through the framework-owned discovery path; they do not import or assemble raw migration files:
+For bundled applications (Workers or Bun), use `startApplicationDatabase(connectionString, options)` from `@chromatis/base/database`. Chromatis embeds the declared product and framework migrations as the server-only `chromatis-migrations` module, so startup needs no source files or filesystem access. Options are the same as `createDatabase`; production startup checks the schema, while the deployment CLI applies migrations separately.
+
+Existing Bun applications may also use the filesystem discovery path; applications do not import or assemble raw migration files:
 
 ```ts
 import { startDatabase } from "@chromatis/base/db-migrations";

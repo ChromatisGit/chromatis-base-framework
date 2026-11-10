@@ -2,9 +2,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { BunPlugin } from "bun";
 import type { ResolvedApplication } from "./resolvedApplication.js";
+import { loadMigrationFiles } from "./dbMigrations.js";
 
 /**
- * Chromatis' two virtual modules, written under `.chromatis/build/`:
+ * Chromatis' virtual modules, written under `.chromatis/build/`:
  *
  * - `chromatis-config`: `config[moduleName]` (validated module configuration
  *   for the build environment) and `app` (`name`, `domain`, `publicUrl`,
@@ -14,7 +15,11 @@ import type { ResolvedApplication } from "./resolvedApplication.js";
  * Vite aliases them for dev and builds; `virtualModulePlugin` resolves them for
  * plain Bun (importing the server hook, `Bun.build`).
  */
-export const VIRTUAL_MODULES = ["chromatis-artifacts", "chromatis-config"];
+export const VIRTUAL_MODULES = [
+  "chromatis-artifacts",
+  "chromatis-config",
+  "chromatis-migrations",
+];
 
 const virtualFile = (root: string, specifier: string): string =>
   path.join(
@@ -127,6 +132,20 @@ export function writeConfigModule(
   const file = virtualFile(root, "chromatis-config");
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, configModuleText(app));
+  const migrations = app.postgresql
+    ? loadMigrationFiles(path.join(app.packageRoot, "src/modules")).map(
+        ({ module, version, description, sql }) => ({
+          module,
+          version,
+          description,
+          sql,
+        }),
+      )
+    : [];
+  writeFileSync(
+    virtualFile(root, "chromatis-migrations"),
+    `export const migrations = ${JSON.stringify(migrations)};\n`,
+  );
   if (app.mounted) {
     writeFileSync(
       virtualFile(root, "chromatis-artifacts"),
@@ -148,7 +167,7 @@ export function virtualModulePlugin(root: string): BunPlugin {
     name: "chromatis-virtual-modules",
     setup(builder) {
       builder.onResolve(
-        { filter: /^chromatis-(artifacts|config)$/ },
+        { filter: /^chromatis-(artifacts|config|migrations)$/ },
         (args) => {
           const file = virtualFile(root, args.path);
           if (existsSync(file)) {

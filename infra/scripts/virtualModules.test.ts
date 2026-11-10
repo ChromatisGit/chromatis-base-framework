@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { generateArtifacts, loadHook } from "./application.js";
 import { embedArtifacts, prepareArtifacts } from "./artifacts.js";
@@ -29,6 +29,40 @@ async function prepared(config = "") {
   return { root, app };
 }
 
+test("database migrations survive bundling without runtime source files", async () => {
+  const fixture = await createInstance({
+    modules: { data: { body: "database: true," } },
+    config: { "app.toml": APP_TOML },
+    packageFiles: {
+      "src/modules/data/migrations/0.0.0__probe.sql":
+        "CREATE TABLE migration_probe (id uuid PRIMARY KEY);\n",
+    },
+  });
+  const app = await resolveApplication(fixture.root, "production");
+  generateArtifacts(fixture.root, app);
+  const entry = path.join(fixture.root, "migration-entry.ts");
+  await Bun.write(
+    entry,
+    'import { migrations } from "chromatis-migrations"; console.log(JSON.stringify({ product: migrations.some(m => m.sql.includes("migration_probe")), auth: migrations.some(m => m.sql.includes("auth_sessions")) }));',
+  );
+  const output = path.join(fixture.root, "migration-bundle.js");
+  await bundleForBun(fixture.root, entry, output);
+  unlinkSync(
+    path.join(
+      fixture.packageRoot,
+      "src/modules/data/migrations/0.0.0__probe.sql",
+    ),
+  );
+  const result = Bun.spawnSync(["bun", output], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(result.exitCode).toBe(0);
+  expect(JSON.parse(result.stdout.toString())).toEqual({
+    product: true,
+    auth: true,
+  });
+});
 describe("virtual modules", () => {
   test("the generated config module holds module configs and the app facts", async () => {
     const { root } = await prepared('[default]\ncourses = ["a", "b"]\n');

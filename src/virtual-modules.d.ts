@@ -14,6 +14,12 @@ declare module "chromatis-artifacts" {
   export const artifacts: Readonly<Record<string, ArtifactFiles>>;
 }
 
+declare module "chromatis-migrations" {
+  import type { MigrationAsset } from "@chromatis/base/database";
+  /** Framework and product migrations embedded at build time; server-only. */
+  export const migrations: readonly MigrationAsset[];
+}
+
 declare module "chromatis-config" {
   /**
    * Validated, non-secret configuration of each module (`config/<module>.toml`

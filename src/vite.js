@@ -254,7 +254,7 @@ function documentAtRoot() {
  */
 function serverOnlyModules(root) {
   const files = new Set(
-    ["artifacts.ts", "config.ts"].map((file) =>
+    ["artifacts.ts", "config.ts", "migrations.ts"].map((file) =>
       normalizePath(path.join(root, ".chromatis/build", file)),
     ),
   );
@@ -271,6 +271,7 @@ function serverOnlyModules(root) {
         "export const config = {};",
         'export const app = { name: "", domain: "", publicUrl: "", environment: "" };',
         "export const artifacts = {};",
+        "export const migrations = [];",
       ].join("\n");
     },
   };
@@ -356,6 +357,10 @@ export async function createViteConfig() {
       alias: {
         "chromatis-artifacts": path.join(root, ".chromatis/build/artifacts.ts"),
         "chromatis-config": path.join(root, ".chromatis/build/config.ts"),
+        "chromatis-migrations": path.join(
+          root,
+          ".chromatis/build/migrations.ts",
+        ),
       },
       dedupe: [
         "react",
@@ -367,6 +372,12 @@ export async function createViteConfig() {
     },
     ssr: { noExternal: [...context.bundledPackages, "@chromatis/base"] },
     optimizeDeps: {
+      include: [
+        "react",
+        "react-dom/client",
+        "react/jsx-runtime",
+        "react/jsx-dev-runtime",
+      ],
       entries: [path.join(root, APP_DIRECTORY, "index.html")],
       exclude: context.bundledPackages,
       esbuildOptions: { jsx: "automatic" },
